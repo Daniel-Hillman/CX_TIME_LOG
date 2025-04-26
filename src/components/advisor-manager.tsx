@@ -3,7 +3,7 @@
 import type { Advisor } from '@/types';
 import * as React from 'react';
 import { useState } from 'react';
-import { v4 as uuidv4 } from 'uuid';
+// import { v4 as uuidv4 } from 'uuid'; // No longer needed in this component
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
@@ -13,14 +13,16 @@ import { useToast } from '@/hooks/use-toast';
 
 interface AdvisorManagerProps {
   advisors: Advisor[];
-  onAdvisorsChange: (advisors: Advisor[]) => void;
+  // onAdvisorsChange: (advisors: Advisor[]) => void; // Replaced by specific handlers
+  onAddAdvisor: (name: string) => Promise<void>; // New prop for adding
+  onRemoveAdvisor: (id: string) => Promise<void>; // New prop for removing
 }
 
-export function AdvisorManager({ advisors, onAdvisorsChange }: AdvisorManagerProps) {
+export function AdvisorManager({ advisors, onAddAdvisor, onRemoveAdvisor }: AdvisorManagerProps) {
   const [newAdvisorName, setNewAdvisorName] = useState('');
   const { toast } = useToast();
 
-  const handleAddAdvisor = () => {
+  const handleAddAdvisor = async () => {
     const trimmedName = newAdvisorName.trim();
     if (trimmedName === '') {
       toast({
@@ -31,6 +33,7 @@ export function AdvisorManager({ advisors, onAdvisorsChange }: AdvisorManagerPro
       return;
     }
 
+    // Check for duplicate name in the current list provided by the parent
     if (advisors.some(advisor => advisor.name.toLowerCase() === trimmedName.toLowerCase())) {
        toast({
         title: "Error",
@@ -40,22 +43,41 @@ export function AdvisorManager({ advisors, onAdvisorsChange }: AdvisorManagerPro
       return;
     }
 
-    const newAdvisor: Advisor = { id: uuidv4(), name: trimmedName };
-    onAdvisorsChange([...advisors, newAdvisor]);
-    setNewAdvisorName('');
-     toast({
-      title: "Success",
-      description: `Advisor "${trimmedName}" added.`,
-    });
+    // Signal to the parent to add the advisor
+    try {
+      await onAddAdvisor(trimmedName); // Call the parent's add handler
+      setNewAdvisorName(''); // Clear input only after successful parent operation
+       toast({
+        title: "Success",
+        description: `Advisor "${trimmedName}" added.`,
+      });
+    } catch (error) {
+       console.error('Error adding advisor:', error);
+        toast({
+          title: "Error",
+          description: "Failed to add advisor.",
+          variant: "destructive",
+        });
+    }
   };
 
-  const handleRemoveAdvisor = (idToRemove: string) => {
-    const advisorToRemove = advisors.find(a => a.id === idToRemove);
-    if (advisorToRemove) {
-       onAdvisorsChange(advisors.filter((advisor) => advisor.id !== idToRemove));
+  const handleRemoveAdvisor = async (idToRemove: string) => {
+     const advisorToRemove = advisors.find(a => a.id === idToRemove);
+    if (!advisorToRemove) return; // Should not happen if UI is in sync
+
+    // Signal to the parent to remove the advisor
+    try {
+       await onRemoveAdvisor(idToRemove); // Call the parent's remove handler
        toast({
          title: "Success",
          description: `Advisor "${advisorToRemove.name}" removed.`,
+       });
+    } catch (error) {
+       console.error('Error removing advisor:', error);
+       toast({
+         title: "Error",
+         description: "Failed to remove advisor.",
+         variant: "destructive",
        });
     }
   };
@@ -86,6 +108,7 @@ export function AdvisorManager({ advisors, onAdvisorsChange }: AdvisorManagerPro
           ) : (
             <ul className="space-y-2">
               {advisors.map((advisor) => (
+                // Use advisor.id which should now be the Firestore ID consistently
                 <li key={advisor.id} className="flex justify-between items-center p-2 bg-background rounded shadow-sm">
                   <span className="text-foreground">{advisor.name}</span>
                   <Button
@@ -98,7 +121,8 @@ export function AdvisorManager({ advisors, onAdvisorsChange }: AdvisorManagerPro
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </li>
-              ))}
+              ))
+              }
             </ul>
           )}
         </ScrollArea>

@@ -3,15 +3,14 @@
 import type { LoggedEvent, Advisor } from '@/types';
 import * as React from 'react';
 import { useState, useMemo } from 'react';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, isWithinInterval, compareAsc, compareDesc } from 'date-fns'; // Import compareAsc, compareDesc
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
-import { CalendarIcon, Trash2 } from 'lucide-react';
+import { CalendarIcon, Trash2, ArrowUpDown } from 'lucide-react'; // Import ArrowUpDown icon
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { TimeLogSummary } from '@/components/time-log-summary';
 import { useToast } from "@/hooks/use-toast";
@@ -26,6 +25,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { DateRange } from "react-day-picker";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 
 interface EventListProps {
@@ -34,8 +36,15 @@ interface EventListProps {
   onDeleteEvent: (eventId: string) => void;
 }
 
+type SortCriteria = 'date' | 'advisor' | 'loggedTime';
+type SortDirection = 'asc' | 'desc';
+
 export function EventList({ events, advisors, onDeleteEvent }: EventListProps) {
-  const [filterDate, setFilterDate] = useState<Date | undefined>(undefined);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [selectedAdvisorId, setSelectedAdvisorId] = useState<string | 'all'>('all');
+  const [sortCriteria, setSortCriteria] = useState<SortCriteria>('date'); // Default sort by date
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc'); // Default sort descending
+
   const { toast } = useToast();
 
   const advisorMap = useMemo(() => {
@@ -46,26 +55,49 @@ export function EventList({ events, advisors, onDeleteEvent }: EventListProps) {
   }, [advisors]);
 
   const filteredEvents = useMemo(() => {
-    if (!filterDate) {
-      return events;
-    }
-    const formattedFilterDate = format(filterDate, 'yyyy-MM-dd');
-    return events.filter(event => event.date === formattedFilterDate);
-  }, [events, filterDate]);
+    let filtered = events;
 
-  // Sort events by date descending (most recent first)
-  const sortedEvents = useMemo(() => {
-     return [...filteredEvents].sort((a, b) => {
-        const dateA = parseISO(a.date).getTime();
-        const dateB = parseISO(b.date).getTime();
-        // Sort by date descending
-        if (dateB !== dateA) {
-            return dateB - dateA;
+    // Filter by date range
+    if (dateRange?.from) {
+      filtered = filtered.filter(event => {
+        const eventDate = parseISO(event.date);
+        if (dateRange.to) {
+          return isWithinInterval(eventDate, { start: dateRange.from!, end: dateRange.to! });
+        } else {
+          return isWithinInterval(eventDate, { start: dateRange.from!, end: dateRange.from! });
         }
-        // If dates are same, maybe sort by logged time or title? Let's keep original order for now.
-        return 0;
+      });
+    }
+
+    // Filter by advisor
+    if (selectedAdvisorId !== 'all') {
+      filtered = filtered.filter(event => event.advisorId === selectedAdvisorId);
+    }
+
+    return filtered;
+  }, [events, dateRange, selectedAdvisorId]);
+
+  const sortedEvents = useMemo(() => {
+     const sorted = [...filteredEvents].sort((a, b) => {
+        let comparison = 0;
+
+        if (sortCriteria === 'date') {
+            const dateA = parseISO(a.date).getTime();
+            const dateB = parseISO(b.date).getTime();
+            comparison = compareAsc(dateA, dateB); // compare dates ascending initially
+        } else if (sortCriteria === 'advisor') {
+            const nameA = advisorMap[a.advisorId] || '';
+            const nameB = advisorMap[b.advisorId] || '';
+            comparison = nameA.localeCompare(nameB); // compare advisor names
+        } else if (sortCriteria === 'loggedTime') {
+            comparison = a.loggedTime - b.loggedTime; // compare logged time numerically
+        }
+
+        // Apply sorting direction
+        return sortDirection === 'asc' ? comparison : -comparison;
      });
-  }, [filteredEvents]);
+     return sorted;
+  }, [filteredEvents, sortCriteria, sortDirection, advisorMap]);
 
   const handleDelete = (eventId: string, eventTitle: string) => {
     onDeleteEvent(eventId);
@@ -75,36 +107,51 @@ export function EventList({ events, advisors, onDeleteEvent }: EventListProps) {
     });
   }
 
+  const toggleSortDirection = () => {
+      setSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'));
+  };
 
   return (
     <Card className="w-full shadow-lg">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <CardHeader className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0 pb-2">
         <CardTitle className="text-xl font-semibold text-primary">Logged Events</CardTitle>
-        <div className="flex items-center gap-2">
-         <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant={"outline"}
-                className={cn(
-                  "w-[240px] justify-start text-left font-normal",
-                  !filterDate && "text-muted-foreground"
-                )}
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {filterDate ? format(filterDate, "PPP") : <span>Filter by date</span>}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="end">
-              <Calendar
-                mode="single"
-                selected={filterDate}
-                onSelect={setFilterDate}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
-          {filterDate && (
-              <Button variant="ghost" size="sm" onClick={() => setFilterDate(undefined)}>Clear Filter</Button>
+        <div className="flex flex-col md:flex-row items-center gap-4">
+          {/* Date Range Picker */}
+          <DateRangePicker date={dateRange} onDateChange={setDateRange} />
+
+          {/* Advisor Filter */}
+           <Select onValueChange={setSelectedAdvisorId} defaultValue={selectedAdvisorId}>
+              <SelectTrigger className="w-[180px]">
+                 <SelectValue placeholder="Filter by Advisor" />
+              </SelectTrigger>
+              <SelectContent>
+                 <SelectItem value="all">All Advisors</SelectItem>
+                 {advisors.map(advisor => (
+                    <SelectItem key={advisor.id} value={advisor.id}>{advisor.name}</SelectItem>
+                 ))}
+              </SelectContent>
+           </Select>
+
+            {/* Sort Controls */}
+            <div className="flex items-center gap-2">
+                 <Select onValueChange={(value: SortCriteria) => setSortCriteria(value)} defaultValue={sortCriteria}>
+                    <SelectTrigger className="w-[150px]">
+                       <SelectValue placeholder="Sort by..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                       <SelectItem value="date">Date</SelectItem>
+                       <SelectItem value="advisor">Advisor</SelectItem>
+                       <SelectItem value="loggedTime">Time Logged</SelectItem>
+                    </SelectContent>
+                 </Select>
+                <Button variant="outline" size="icon" onClick={toggleSortDirection} aria-label="Toggle sort direction">
+                    <ArrowUpDown className="h-4 w-4" />
+                </Button>
+            </div>
+
+          {/* Clear Filters Button */}
+          {(dateRange?.from || selectedAdvisorId !== 'all') && (
+              <Button variant="ghost" size="sm" onClick={() => {setDateRange(undefined); setSelectedAdvisorId('all');}}>Clear Filters</Button>
           )}
         </div>
       </CardHeader>
@@ -124,7 +171,7 @@ export function EventList({ events, advisors, onDeleteEvent }: EventListProps) {
               {sortedEvents.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                    {filterDate ? 'No events logged for this date.' : 'No events logged yet.'}
+                    {dateRange?.from || selectedAdvisorId !== 'all' ? 'No events found for the selected filters.' : 'No events logged yet.'}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -167,7 +214,7 @@ export function EventList({ events, advisors, onDeleteEvent }: EventListProps) {
           </Table>
         </ScrollArea>
         <div className='mt-8'>
-          <TimeLogSummary loggedEvents={events} advisors={advisors} />
+          <TimeLogSummary loggedEvents={sortedEvents} advisors={advisors} />
         </div>
       </CardContent>
     </Card>
