@@ -13,6 +13,7 @@ import { CalendarIcon, Trash2 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
+import { TimeLogSummary } from '@/components/time-log-summary';
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog,
@@ -165,6 +166,9 @@ export function EventList({ events, advisors, onDeleteEvent }: EventListProps) {
             </TableBody>
           </Table>
         </ScrollArea>
+        <div className='mt-8'>
+          <TimeLogSummary loggedEvents={events} advisors={advisors} />
+        </div>
       </CardContent>
     </Card>
   );

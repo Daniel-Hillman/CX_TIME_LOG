@@ -59,7 +59,7 @@ export default function Home() {
         <h1 className="text-3xl md:text-4xl font-bold text-primary flex items-center justify-center gap-2">
           <Clock className="h-8 w-8" /> CX Time Logger
         </h1>
-        <p className="text-muted-foreground mt-2">Log and manage your team's time efficiently.</p>
+        <p className="text-muted-foreground mt-2">Cheeky lil time log</p>
       </header>
 
       <Tabs defaultValue="log-time" className="w-full">

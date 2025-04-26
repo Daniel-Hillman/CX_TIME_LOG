@@ -1,13 +1,12 @@
 'use client';
 
 import type { Advisor, LoggedEvent } from '@/types';
-import * as React from 'react';
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -25,13 +24,13 @@ interface TimeLogFormProps {
   onLogEvent: (event: LoggedEvent) => void;
 }
 
-const logTimeOptions = [10, 20, 30, 45, 60, 90, 120]; // Time options in minutes
+const logTimeOptions = [5, 10, 15, 30, 45, 60, 90, 120]; // Time options in minutes
 
 const formSchema = z.object({
   date: z.date({ required_error: "A date is required." }),
   advisorId: z.string({ required_error: "Please select an advisor." }).min(1, "Please select an advisor."),
   eventTitle: z.string().min(1, { message: 'Event title is required.' }),
-  loggedTime: z.string({ required_error: "Please select logged time." }).min(1, "Please select logged time."), // Store as string initially from select
+  loggedTime: z.number({ required_error: "Please select logged time." }).min(1, { message: "Time must be at least 1 minute." }), // Now accepts number directly
 });
 
 export function TimeLogForm({ advisors, onLogEvent }: TimeLogFormProps) {
@@ -42,7 +41,7 @@ export function TimeLogForm({ advisors, onLogEvent }: TimeLogFormProps) {
       date: new Date(),
       advisorId: '',
       eventTitle: '',
-      loggedTime: '',
+      loggedTime: 0,
     },
   });
 
@@ -52,15 +51,15 @@ export function TimeLogForm({ advisors, onLogEvent }: TimeLogFormProps) {
       date: format(values.date, 'yyyy-MM-dd'),
       advisorId: values.advisorId,
       eventTitle: values.eventTitle,
-      loggedTime: parseInt(values.loggedTime, 10), // Convert logged time string to number
+      loggedTime: values.loggedTime, // Store as string initially from select
     };
     onLogEvent(newEvent);
     form.reset({
         date: new Date(), // Reset date to today
         advisorId: '', // Keep advisor selection or clear based on preference
         eventTitle: '',
-        loggedTime: ''
-    }); // Reset form after submission
+        loggedTime: 0
+    });
      toast({
       title: "Success",
       description: "Time logged successfully.",
@@ -164,7 +163,12 @@ export function TimeLogForm({ advisors, onLogEvent }: TimeLogFormProps) {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Time Logged (minutes)</FormLabel>
-                   <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                   <Select onValueChange={(value) => {
+                       // Parse the string value to a number
+                       const parsedValue = parseInt(value, 10);
+                       field.onChange(parsedValue); // Update form field with the parsed number
+                   }} defaultValue={field.value.toString()} value={field.value.toString()}>
+
                       <FormControl>
                         <SelectTrigger>
                            <Clock className="mr-2 h-4 w-4 text-muted-foreground" />
