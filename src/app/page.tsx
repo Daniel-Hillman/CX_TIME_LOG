@@ -8,15 +8,17 @@ import { AdvisorManager } from '@/components/advisor-manager';
 import { TimeLogForm } from '@/components/time-log-form';
 import { EventList } from '@/components/event-list';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, ListChecks, Clock, LogOut } from 'lucide-react';
+import { Users, ListChecks, Clock, LogOut, BarChart2, AreaChart } from 'lucide-react'; // Import BarChart2 and AreaChart icons
 import { Button } from '@/components/ui/button';
 
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged, User, signOut } from 'firebase/auth';
-import { collection, query, where, getDocs, addDoc, deleteDoc, doc, runTransaction } from 'firebase/firestore'; // Import runTransaction
+import { collection, query, where, getDocs, addDoc, deleteDoc, doc, runTransaction } from 'firebase/firestore';
 
 import { LoginForm } from '@/components/auth/login-form';
-import { SignUpForm } from '@/components/auth/signup-form'; // Corrected import path
+import { SignUpForm } from '@/components/auth/signup-form';
+import { ReportSection } from '@/components/report-section';
+import { VisualizationsSection } from '@/components/visualizations-section'; // Import VisualizationsSection
 
 export default function Home() {
   // const [advisors, setAdvisors] = useLocalStorage<Advisor[]>('cx-advisors', []);
@@ -71,13 +73,11 @@ export default function Home() {
     if (!user) return; // Ensure user is logged in
 
     try {
-      // Add advisor to Firestore. Firestore generates the ID.
       await addDoc(collection(db, 'advisors'), { name, userId: user.uid });
-      // After adding, re-fetch data to update state with the new advisor (including its Firestore ID).
       await fetchUserData(user.uid);
     } catch (error) {
       console.error('Error adding advisor:', error);
-      throw error; // Re-throw to allow AdvisorManager to handle error toast
+      throw error;
     }
   };
 
@@ -85,44 +85,33 @@ export default function Home() {
       if (!user) return; // Ensure user is logged in
 
       try {
-          // Use a transaction to ensure atomicity: delete advisor and its logs
           await runTransaction(db, async (transaction) => {
-              // Delete advisor
               const advisorRef = doc(db, 'advisors', advisorIdToRemove);
               transaction.delete(advisorRef);
 
-              // Find and delete associated logged events
               const associatedEventsQuery = query(collection(db, 'loggedEvents'), where('advisorId', '==', advisorIdToRemove), where('userId', '==', user.uid));
               const associatedEventsSnapshot = await getDocs(associatedEventsQuery);
               associatedEventsSnapshot.docs.forEach(eventDoc => {
                   transaction.delete(eventDoc.ref);
               });
           });
-
-          // After deletion, re-fetch data to update state
           await fetchUserData(user.uid);
 
       } catch (error) {
           console.error('Error removing advisor and logs:', error);
-          throw error; // Re-throw to allow AdvisorManager to handle error toast
+          throw error;
       }
   };
 
 
-  const handleLogEvent = async (newEvent: Omit<LoggedEvent, 'userId'>) => {
+  const handleLogEvent = async (newEvent: Omit<LoggedEvent, 'userId' | 'id'>) => { // Adjusted type to omit id as well
     if (!user) return; // Ensure user is logged in
 
     try {
-      // Add event to Firestore
-      // Omit the temporary id generated in TimeLogForm if it exists,
-      // Firestore will generate the actual ID.
       const eventToAdd = { ...newEvent, userId: user.uid };
-      // If newEvent might have a temporary 'id' from client-side generation,
-      // explicitly remove it before sending to Firestore to ensure Firestore generates the ID.
-      // delete eventToAdd.id; // Uncomment this line if TimeLogForm still generates a temporary ID
+      // Ensure no temporary client-generated ID is sent to Firestore addDoc
+      // delete eventToAdd.id; // This line is now implicitly handled by Omit in type
       await addDoc(collection(db, 'loggedEvents'), eventToAdd);
-
-      // After adding, re-fetch data to update state
       await fetchUserData(user.uid);
     } catch (error) {
       console.error('Error adding log event:', error);
@@ -132,9 +121,7 @@ export default function Home() {
    const handleDeleteEvent = async (eventIdToDelete: string) => {
         if (!user) return; // Ensure user is logged in
         try {
-            // Delete event from Firestore
             await deleteDoc(doc(db, 'loggedEvents', eventIdToDelete));
-             // After deleting, re-fetch data to update state
             await fetchUserData(user.uid);
         } catch (error) {
             console.error('Error deleting log event:', error);
@@ -171,7 +158,6 @@ export default function Home() {
             </div>
          ) : (
              <div className="text-center">
-               {/* Assuming you have a SignUpForm component or similar */}
                <SignUpForm />
                  <p className="text-center text-sm mt-4">
                   Already have an account?{' '}
@@ -196,13 +182,20 @@ export default function Home() {
        <p className="text-muted-foreground mt-2 text-center">Cheeky lil time log</p>
 
       <Tabs defaultValue="log-time" className="w-full mt-8">
-        <TabsList className="grid w-full grid-cols-3 mb-6 bg-secondary rounded-lg p-1">
+        {/* Corrected grid-cols to 5 for 5 tabs */}
+        <TabsList className="grid w-full grid-cols-5 mb-6 bg-secondary rounded-lg p-1">
           <TabsTrigger value="log-time" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
              <Clock className="mr-2 h-4 w-4" /> Log Time
           </TabsTrigger>
           <TabsTrigger value="view-logs" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
              <ListChecks className="mr-2 h-4 w-4" /> View Logs
           </TabsTrigger>
+           <TabsTrigger value="reports" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              <BarChart2 className="mr-2 h-4 w-4" /> Reports
+           </TabsTrigger>
+           <TabsTrigger value="visualizations" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              <AreaChart className="mr-2 h-4 w-4" /> Visualizations
+           </TabsTrigger>
           <TabsTrigger value="manage-advisors" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
              <Users className="mr-2 h-4 w-4" /> Manage Advisors
           </TabsTrigger>
@@ -216,8 +209,15 @@ export default function Home() {
            <EventList events={loggedEvents} advisors={advisors} onDeleteEvent={handleDeleteEvent} />
         </TabsContent>
 
+         <TabsContent value="reports"> {/* New Reports Content */}
+             <ReportSection loggedEvents={loggedEvents} advisors={advisors} />
+         </TabsContent>
+
+        <TabsContent value="visualizations"> {/* New Visualizations Content */}
+            <VisualizationsSection loggedEvents={loggedEvents} advisors={advisors} />
+         </TabsContent>
+
         <TabsContent value="manage-advisors">
-          {/* Pass specific add/remove handlers */}
           <AdvisorManager advisors={advisors} onAddAdvisor={handleAddAdvisor} onRemoveAdvisor={handleRemoveAdvisor} />
         </TabsContent>
       </Tabs>
