@@ -52,8 +52,8 @@ export function DateRangePicker({
           <Calendar
             initialFocus
             mode="range"
-            defaultDate={date}
-            selected={date}
+            // Removed defaultDate prop as it's invalid for range mode
+            selected={date} 
             onSelect={onDateChange}
             numberOfMonths={2}
           />

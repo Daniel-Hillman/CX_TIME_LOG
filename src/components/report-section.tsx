@@ -3,7 +3,7 @@
 import type { LoggedEvent, Advisor } from '@/types';
 import * as React from 'react';
 import { useState, useMemo } from 'react';
-import { format, parseISO, isWithinInterval } from 'date-fns';
+import { format, parseISO, isWithinInterval, startOfDay } from 'date-fns'; // Import startOfDay
 import { DateRange } from "react-day-picker";
 
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -37,14 +37,27 @@ export function ReportSection({ loggedEvents, advisors }: ReportSectionProps) {
 
     // Filter by date range
     if (dateRange?.from) {
-      filtered = filtered.filter(event => {
-        const eventDate = parseISO(event.date);
-        // Adjust date range to include the entire end day
-        const start = dateRange.from!;
-        const end = dateRange.to ? new Date(dateRange.to) : new Date(dateRange.from);
-        if (dateRange.to) end.setDate(end.getDate() + 1);
+      const fromDate = startOfDay(dateRange.from); // Ensure comparison starts from the beginning of the day
+      // If 'to' date exists, use it, otherwise use the 'from' date.
+      // Use startOfDay for 'to' date as well to ensure we capture the whole day when setting time later.
+      const toDate = dateRange.to ? startOfDay(dateRange.to) : fromDate;
+      toDate.setHours(23, 59, 59, 999); // Set time to end of the day
 
-        return isWithinInterval(eventDate, { start, end });
+      filtered = filtered.filter(event => {
+          try {
+             const eventDate = parseISO(event.date);
+             // Check if eventDate is valid
+             if (isNaN(eventDate.getTime())) {
+                 console.warn("Skipping event with invalid date:", event);
+                 return false;
+             }
+
+             // Use the pre-calculated start and end dates
+             return isWithinInterval(eventDate, { start: fromDate, end: toDate });
+          } catch (error) {
+              console.error("Error parsing or filtering date:", event.date, error);
+              return false;
+          }
       });
     }
 
@@ -75,56 +88,43 @@ export function ReportSection({ loggedEvents, advisors }: ReportSectionProps) {
 
     // Calculate totals for each group and sort
     const summarizedGroups = Object.entries(groups).map(([key, events]) => {
-        const totalTime = events.reduce((sum, event) => sum + event.loggedTime, 0);
+        const totalTime = events.reduce((sum, event) => sum + (event.loggedTime || 0), 0);
         let groupLabel = '';
         if (grouping === 'advisor') {
             groupLabel = advisorMap[key] || 'Unknown Advisor';
         } else if (grouping === 'date') {
-            groupLabel = format(parseISO(key), 'MMM dd, yyyy');
+            try {
+                // Ensure key is valid before parsing
+                const parsedDate = parseISO(key);
+                if (!isNaN(parsedDate.getTime())) {
+                    groupLabel = format(parsedDate, 'MMM dd, yyyy');
+                } else {
+                    groupLabel = 'Invalid Date';
+                }
+            } catch (e) {
+                console.error("Error parsing date key for grouping label:", key, e);
+                groupLabel = 'Invalid Date';
+            }
         }
-        return { key, label: groupLabel, totalTime, events }; // Keep events array for potential future use
+        return { key, label: groupLabel, totalTime, events };
     });
 
      // Sort groups
      if (grouping === 'date') {
-        // Sort dates chronologically
-         return summarizedGroups.sort((a, b) => parseISO(a.key).getTime() - parseISO(b.key).getTime());
+         return summarizedGroups.sort((a, b) => {
+            try {
+               const timeA = parseISO(a.key).getTime();
+               const timeB = parseISO(b.key).getTime();
+               return (isNaN(timeA) ? 0 : timeA) - (isNaN(timeB) ? 0 : timeB);
+            } catch {
+               return 0;
+            }
+         });
      } else {
-        // Sort advisors alphabetically by name
         return summarizedGroups.sort((a, b) => a.label.localeCompare(b.label));
      }
 
   }, [filteredEvents, grouping, advisorMap]);
-
-   const handleExportCsv = () => {
-    const csvRows = [];
-    // Add header row
-    csvRows.push(['Date', 'Advisor Name', 'Event Title', 'Time Logged (minutes)', 'Advisor ID', 'Event ID'].join(','));
-
-    // Add data rows (from filtered events, providing detailed raw data)
-    filteredEvents.forEach(event => {
-        const date = format(parseISO(event.date), 'yyyy-MM-dd');
-        const advisorName = advisorMap[event.advisorId] || 'Unknown Advisor';
-        // Basic CSV escaping for titles that might contain commas or quotes
-        const eventTitle = `"${event.eventTitle.replace(/"/g, '""')}"`;
-        const loggedTime = event.loggedTime;
-        const advisorId = event.advisorId;
-        const eventId = event.id;
-        csvRows.push([date, advisorName, eventTitle, loggedTime, advisorId, eventId].join(','));
-    });
-
-    // Create a CSV string and trigger download
-    const csvString = csvRows.join('\\n'); // Corrected newline escape sequence
-    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', 'time_log_report.csv');
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
 
 
   return (
@@ -132,10 +132,7 @@ export function ReportSection({ loggedEvents, advisors }: ReportSectionProps) {
       <CardHeader className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0 pb-2">
         <CardTitle className="text-xl font-semibold text-primary">Reports</CardTitle>
         <div className="flex flex-col md:flex-row items-center gap-4">
-          {/* Date Range Picker */}
           <DateRangePicker date={dateRange} onDateChange={setDateRange} />
-
-          {/* Advisor Filter */}
            <Select onValueChange={setSelectedAdvisorId} defaultValue={selectedAdvisorId}>
               <SelectTrigger className="w-[180px]">
                  <SelectValue placeholder="Filter by Advisor" />
@@ -147,8 +144,6 @@ export function ReportSection({ loggedEvents, advisors }: ReportSectionProps) {
                  ))}
               </SelectContent>
            </Select>
-
-           {/* Grouping Select */}
             <Select onValueChange={(value: GroupingCriteria) => setGrouping(value)} defaultValue={grouping}>
               <SelectTrigger className="w-[150px]">
                  <SelectValue placeholder="Group by..." />
@@ -158,11 +153,6 @@ export function ReportSection({ loggedEvents, advisors }: ReportSectionProps) {
                  <SelectItem value="date">Date</SelectItem>
               </SelectContent>
            </Select>
-
-          {/* Export Button */}
-          <Button onClick={handleExportCsv} disabled={filteredEvents.length === 0}>Export CSV</Button>
-
-          {/* Clear Filters Button */}
           {(dateRange?.from || selectedAdvisorId !== 'all') && (
               <Button variant="ghost" size="sm" onClick={() => {setDateRange(undefined); setSelectedAdvisorId('all');}}>Clear Filters</Button>
           )}

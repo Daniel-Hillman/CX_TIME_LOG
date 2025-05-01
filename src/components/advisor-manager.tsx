@@ -2,83 +2,71 @@
 
 import type { Advisor } from '@/types';
 import * as React from 'react';
-import { useState } from 'react';
-// import { v4 as uuidv4 } from 'uuid'; // No longer needed in this component
+import { useState, useRef, useEffect } from 'react'; // Import useRef, useEffect
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Trash2, UserPlus } from 'lucide-react';
+import { Trash2, UserPlus, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from "@/lib/utils";
 
 interface AdvisorManagerProps {
   advisors: Advisor[];
-  // onAdvisorsChange: (advisors: Advisor[]) => void; // Replaced by specific handlers
-  onAddAdvisor: (name: string) => Promise<void>; // New prop for adding
-  onRemoveAdvisor: (id: string) => Promise<void>; // New prop for removing
+  onAddAdvisor: (name: string) => Promise<void>;
+  onRemoveAdvisor: (id: string) => Promise<void>;
+  isAdding: boolean;
+  removingId: string | null;
 }
 
-export function AdvisorManager({ advisors, onAddAdvisor, onRemoveAdvisor }: AdvisorManagerProps) {
+export function AdvisorManager({ advisors, onAddAdvisor, onRemoveAdvisor, isAdding, removingId }: AdvisorManagerProps) {
   const [newAdvisorName, setNewAdvisorName] = useState('');
   const { toast } = useToast();
+  const inputRef = useRef<HTMLInputElement>(null); // Ref for the input element
+
+  // Effect to focus input after adding is finished
+  useEffect(() => {
+    if (!isAdding && inputRef.current) {
+        // Check if focus was lost due to the button click, re-focus if needed
+        // This might need adjustment depending on exact browser behavior
+         setTimeout(() => inputRef.current?.focus(), 0);
+    }
+  }, [isAdding]);
 
   const handleAddAdvisor = async () => {
+    if (isAdding) return;
     const trimmedName = newAdvisorName.trim();
     if (trimmedName === '') {
-      toast({
-        title: "Error",
-        description: "Advisor name cannot be empty.",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Advisor name cannot be empty.", variant: "destructive" });
       return;
     }
-
-    // Check for duplicate name in the current list provided by the parent
     if (advisors.some(advisor => advisor.name.toLowerCase() === trimmedName.toLowerCase())) {
-       toast({
-        title: "Error",
-        description: "Advisor with this name already exists.",
-        variant: "destructive",
-      });
-      return;
+       toast({ title: "Error", description: "Advisor with this name already exists.", variant: "destructive" });
+       return;
     }
 
-    // Signal to the parent to add the advisor
     try {
-      await onAddAdvisor(trimmedName); // Call the parent's add handler
-      setNewAdvisorName(''); // Clear input only after successful parent operation
-       toast({
-        title: "Success",
-        description: `Advisor "${trimmedName}" added.`,
-      });
-    } catch (error) {
-       console.error('Error adding advisor:', error);
-        toast({
-          title: "Error",
-          description: "Failed to add advisor.",
-          variant: "destructive",
-        });
+      await onAddAdvisor(trimmedName);
+      setNewAdvisorName('');
+      toast({ title: "Success", description: `Advisor "${trimmedName}" added.` });
+      // Focus handled by useEffect now
+    } catch {
+      // Error already logged in parent, just show generic toast
+      toast({ title: "Error", description: "Failed to add advisor.", variant: "destructive" });
     }
   };
 
   const handleRemoveAdvisor = async (idToRemove: string) => {
-     const advisorToRemove = advisors.find(a => a.id === idToRemove);
-    if (!advisorToRemove) return; // Should not happen if UI is in sync
+    if (removingId) return;
+    const advisorToRemove = advisors.find(a => a.id === idToRemove);
+    if (!advisorToRemove) return;
 
-    // Signal to the parent to remove the advisor
     try {
-       await onRemoveAdvisor(idToRemove); // Call the parent's remove handler
-       toast({
-         title: "Success",
-         description: `Advisor "${advisorToRemove.name}" removed.`,
-       });
-    } catch (error) {
-       console.error('Error removing advisor:', error);
-       toast({
-         title: "Error",
-         description: "Failed to remove advisor.",
-         variant: "destructive",
-       });
+       await onRemoveAdvisor(idToRemove);
+       // Success toast handled in parent where data is refreshed
+    } catch {
+       // Error already logged in parent, just show generic toast
+       toast({ title: "Error", description: "Failed to remove advisor.", variant: "destructive" });
     }
   };
 
@@ -90,16 +78,23 @@ export function AdvisorManager({ advisors, onAddAdvisor, onRemoveAdvisor }: Advi
       <CardContent>
         <div className="flex gap-2 mb-4">
           <Input
+            ref={inputRef} // Assign ref to the input
             type="text"
             placeholder="New advisor name"
             value={newAdvisorName}
             onChange={(e) => setNewAdvisorName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleAddAdvisor()}
+            onKeyDown={(e) => !isAdding && e.key === 'Enter' && handleAddAdvisor()}
             aria-label="New advisor name"
             className="flex-grow"
+            disabled={isAdding || !!removingId}
           />
-          <Button onClick={handleAddAdvisor} aria-label="Add Advisor" variant="outline" className="bg-accent text-accent-foreground hover:bg-accent/90">
-            <UserPlus className="mr-2 h-4 w-4" /> Add
+          <Button onClick={handleAddAdvisor} aria-label="Add Advisor" variant="outline" className="bg-accent text-accent-foreground hover:bg-accent/90" disabled={isAdding || !!removingId}>
+            {isAdding ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <UserPlus className="mr-2 h-4 w-4" />
+            )}
+            {isAdding ? 'Adding...' : 'Add'}
           </Button>
         </div>
         <ScrollArea className="h-[200px] border rounded-md p-2 bg-secondary/30">
@@ -107,22 +102,28 @@ export function AdvisorManager({ advisors, onAddAdvisor, onRemoveAdvisor }: Advi
              <p className="text-center text-muted-foreground p-4">No advisors added yet.</p>
           ) : (
             <ul className="space-y-2">
-              {advisors.map((advisor) => (
-                // Use advisor.id which should now be the Firestore ID consistently
-                <li key={advisor.id} className="flex justify-between items-center p-2 bg-background rounded shadow-sm">
-                  <span className="text-foreground">{advisor.name}</span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleRemoveAdvisor(advisor.id)}
-                    aria-label={`Remove ${advisor.name}`}
-                    className="text-destructive hover:bg-destructive/10"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </li>
-              ))
-              }
+              {advisors.map((advisor) => {
+                const isRemovingThis = removingId === advisor.id;
+                return (
+                   <li key={advisor.id} className="flex justify-between items-center p-2 bg-background rounded shadow-sm">
+                     <span className={cn("text-foreground", isRemovingThis && "opacity-50")}>{advisor.name}</span>
+                     <Button
+                       variant="ghost"
+                       size="icon"
+                       onClick={() => handleRemoveAdvisor(advisor.id)}
+                       aria-label={`Remove ${advisor.name}`}
+                       className="text-destructive hover:bg-destructive/10"
+                       disabled={!!removingId}
+                     >
+                       {isRemovingThis ? (
+                         <Loader2 className="h-4 w-4 animate-spin" />
+                       ) : (
+                         <Trash2 className="h-4 w-4" />
+                       )}
+                     </Button>
+                   </li>
+                );
+              })}
             </ul>
           )}
         </ScrollArea>

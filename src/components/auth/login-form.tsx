@@ -5,12 +5,13 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { signInWithEmailAndPassword } from 'firebase/auth';
+import { FirebaseError } from 'firebase/app'; // Import FirebaseError from firebase/app
 import { auth } from '@/lib/firebase';
 
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 
 const formSchema = z.object({
@@ -31,17 +32,24 @@ export function LoginForm() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
       await signInWithEmailAndPassword(auth, values.email, values.password);
-      // Handle successful login (e.g., redirect user)
       toast({
         title: 'Login Successful',
         description: 'You have been successfully logged in.',
       });
       // TODO: Redirect user after successful login
-    } catch (error: any) {
+    } catch (error) {
       console.error('Login Error:', error);
+      let errorMessage = 'An error occurred during login.';
+      // Check if error is an instance of FirebaseError or Error
+      if (error instanceof FirebaseError) {
+        errorMessage = error.message;
+      } else if (error instanceof Error) { // Handle generic Error
+        errorMessage = error.message;
+      } // No need for a generic 'else' if we default to the initial message
+
       toast({
         title: 'Login Failed',
-        description: error.message || 'An error occurred during login.',
+        description: errorMessage,
         variant: 'destructive',
       });
     }
@@ -87,13 +95,6 @@ export function LoginForm() {
           </form>
         </Form>
       </CardContent>
-      {/* TODO: Add link to Sign-up page/component */}
-      {/* <CardFooter className="text-center text-sm mt-4">
-        Don't have an account?{' '}
-        <Link href="#" className="underline">
-          Sign up
-        </Link>
-      </CardFooter> */}
     </Card>
   );
 }
