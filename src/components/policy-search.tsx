@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, Search, Upload, FileText, AlertCircle, CalendarClock } from 'lucide-react'; // Added CalendarClock
+import { Loader2, Search, Upload, FileText, AlertCircle, CalendarClock, Receipt } from 'lucide-react'; // Added CalendarClock, Receipt
 
 // Define the structure for policy information extracted from the CSV
 type PolicyInfo = {
@@ -15,6 +15,8 @@ type PolicyInfo = {
   missedPayments: string[]; // Store valid, non-empty dates
   cancellationReason?: string; // Optional: Reason for cancellation/lapse
   potentialCancellationDate?: string; // Optional: Calculated cancellation date for specific 'ON_RISK' cases
+  currentGrossPremiumPerFrequency?: string; // Optional: Monthly premium amount
+  maxNextPremiumCollectionDate?: string; // Optional: Next payment date
 };
 
 // Type for the efficient lookup map
@@ -79,6 +81,8 @@ export function PolicySearch() {
   const MISSED_PAYMENT_2_COL = 'Due Date of 2nd Arrear';
   const MISSED_PAYMENT_3_COL = 'Due Date of 3rd Arrear';
   const CANCELLATION_REASON_COL = 'Cancellation Reason'; // Focus on this column for the reason text
+  const CURRENT_GROSS_PREMIUM_COL = 'Current Gross Premium Per Frequency'; // New column for monthly premium
+  const NEXT_PREMIUM_DATE_COL = 'Max. Next Premium Collection Date'; // New column for next collection date
   // --- End Constants ---
 
   const handleFileChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
@@ -113,19 +117,25 @@ export function PolicySearch() {
             return;
         }
 
+        // Keep base columns mandatory, others optional
         const requiredBaseColumns = [POLICY_NUMBER_COL, STATUS_COL, MISSED_PAYMENT_1_COL, MISSED_PAYMENT_2_COL, MISSED_PAYMENT_3_COL];
         const actualHeaders = Object.keys(results.data[0] || {});
         const missingColumns = requiredBaseColumns.filter(col => !actualHeaders.includes(col));
 
         if (missingColumns.length > 0) {
-            const expectedHeaders = `'${POLICY_NUMBER_COL}', '${STATUS_COL}', '${MISSED_PAYMENT_1_COL}', '${MISSED_PAYMENT_2_COL}', '${MISSED_PAYMENT_3_COL}'`;
-            setParseError(`Missing required columns in CSV: ${missingColumns.join(', ')}. Please ensure the CSV has headers: ${expectedHeaders}. The optional column '${CANCELLATION_REASON_COL}' might also be useful.`);
+            const expectedHeaders = `'${requiredBaseColumns.join("', '")}'`;
+            const optionalHeaders = `'${CANCELLATION_REASON_COL}', '${CURRENT_GROSS_PREMIUM_COL}', '${NEXT_PREMIUM_DATE_COL}'`;
+            setParseError(`Missing required columns in CSV: ${missingColumns.join(', ')}. Expected: ${expectedHeaders}. Optional: ${optionalHeaders}.`);
             setIsLoading(false);
             setFileName(null);
             return;
         }
 
+        // Check for optional columns
         const hasCancellationColumn = actualHeaders.includes(CANCELLATION_REASON_COL);
+        const hasPremiumColumn = actualHeaders.includes(CURRENT_GROSS_PREMIUM_COL);
+        const hasNextDateColumn = actualHeaders.includes(NEXT_PREMIUM_DATE_COL);
+
 
         results.data.forEach((row) => {
           const policyNumber = row[POLICY_NUMBER_COL]?.trim();
@@ -151,6 +161,33 @@ export function PolicySearch() {
             }
             // --- End Calculate Cancellation Reason ---
 
+             // --- Extract Monthly Premium ---
+             let currentGrossPremiumPerFrequency: string | undefined = undefined;
+             if (hasPremiumColumn) {
+                 const premiumValue = row[CURRENT_GROSS_PREMIUM_COL];
+                 if (typeof premiumValue === 'string' || typeof premiumValue === 'number') {
+                     const trimmedPremium = String(premiumValue).trim();
+                     if (trimmedPremium.length > 0) {
+                         currentGrossPremiumPerFrequency = trimmedPremium;
+                     }
+                 }
+             }
+             // --- End Extract Monthly Premium ---
+
+             // --- Extract Next Premium Collection Date ---
+             let maxNextPremiumCollectionDate: string | undefined = undefined;
+             if (hasNextDateColumn) {
+                 const nextDateValue = row[NEXT_PREMIUM_DATE_COL];
+                 if (typeof nextDateValue === 'string') {
+                     const trimmedNextDate = nextDateValue.trim();
+                     if (trimmedNextDate.length > 0) {
+                        // Basic attempt to format if it includes time
+                        maxNextPremiumCollectionDate = trimmedNextDate.split(' ')[0];
+                     }
+                 }
+             }
+             // --- End Extract Next Premium Collection Date ---
+
             // --- Calculate Potential Cancellation Date ---
             let potentialCancellationDate: string | undefined = undefined;
             const statusUpper = status.toUpperCase();
@@ -171,6 +208,8 @@ export function PolicySearch() {
               missedPayments: missedPayments,
               cancellationReason: cancellationReason,
               potentialCancellationDate: potentialCancellationDate, // Add calculated date here
+              currentGrossPremiumPerFrequency: currentGrossPremiumPerFrequency, // Add premium
+              maxNextPremiumCollectionDate: maxNextPremiumCollectionDate, // Add next collection date
             });
           }
         });
@@ -268,7 +307,7 @@ export function PolicySearch() {
           </div>
         )}
 
-        {/* Search Results Section */} 
+        {/* Search Results Section */}
         {searchResult && (
           <div className="pt-4">
             <h3 className="text-lg font-semibold mb-2">Search Result</h3>
@@ -279,18 +318,39 @@ export function PolicySearch() {
                 <CardContent className="p-4 space-y-2">
                   <p><strong>Policy Number:</strong> {searchResult.policyNumber}</p>
                   <p><strong>Status:</strong> <span className={`font-semibold ${getStatusColor(searchResult.status)}`}>{searchResult.status.replace(/_/g, ' ').toUpperCase()}</span></p>
+
+                  {/* Display Monthly Premium */}
+                  {searchResult.currentGrossPremiumPerFrequency && (
+                    <p className="flex items-center">
+                        <Receipt className="mr-2 h-4 w-4 text-blue-600"/>
+                        <strong>Monthly Premium:</strong>
+                        <span className="ml-1 font-semibold text-blue-700">£{searchResult.currentGrossPremiumPerFrequency}</span>
+                    </p>
+                  )}
+
+                  {/* Display Next Premium Collection Date */}
+                  {searchResult.maxNextPremiumCollectionDate && (
+                     <p className="flex items-center">
+                         <CalendarClock className="mr-2 h-4 w-4 text-gray-600"/>
+                         <strong>Next Premium Collection:</strong>
+                         <span className="ml-1">{searchResult.maxNextPremiumCollectionDate}</span>
+                     </p>
+                  )}
+
                   {/* Conditionally display Cancellation Reason for lapsed policies */}
                   {isLapsedStatus(searchResult.status) && searchResult.cancellationReason && (
                     <p><strong>Reason:</strong> <span className="text-muted-foreground">{searchResult.cancellationReason}</span></p>
                   )}
-                  {/* Conditionally display Potential Cancellation Date */} 
+
+                  {/* Conditionally display Potential Cancellation Date */}
                    {searchResult.potentialCancellationDate && (
                     <p className="flex items-center">
-                        <CalendarClock className="mr-2 h-4 w-4 text-orange-600"/> 
-                        <strong>Potential Cancellation Date:</strong> 
+                        <CalendarClock className="mr-2 h-4 w-4 text-orange-600"/>
+                        <strong>Potential Cancellation Date:</strong>
                         <span className="ml-1 text-orange-600 font-semibold">{searchResult.potentialCancellationDate}</span>
                     </p>
                   )}
+
                   <p><strong>Missed Payments ({searchResult.missedPayments.length}):</strong></p>
                   {searchResult.missedPayments.length > 0 ? (
                     <ul className="list-disc list-inside text-muted-foreground pl-4">
