@@ -7,6 +7,8 @@ export const standardEventTypes = [
   "Family care",
   "Learning",
   "Exam/Study",
+  "Task work", // Added Task work
+  "Charity",   // Added Charity
   "Other", // Allows for custom events not covered by predefined types.
 ] as const; // 'as const' ensures the array elements are treated as literal types.
 
@@ -21,23 +23,32 @@ export type Advisor = {
   name: string; // Display name of the advisor.
 };
 
-// *** ADD Task Type ***
-// Represents a task or project that time can be logged against.
+// Defines the structure for tasks, which can be associated with logged events.
 export type Task = {
-  id: string;       // Unique identifier for the task.
-  userId: string;   // Identifier of the user who owns this task.
-  name: string;       // Display name of the task.
-  description?: string; // Optional description for the task.
+  id: string; // Unique identifier for the task.
+  userId: string; // Identifier of the user who owns the task.
+  name: string; // Name or description of the task.
+  dueDate?: string | null; // Optional due date (ISO string format).
+  status: 'pending' | 'in-progress' | 'completed'; // Status of the task.
 };
 
-// Represents a single time log entry created by a user.
+// Represents a single logged event or time entry.
 export type LoggedEvent = {
-  id: string; // Unique identifier for the logged event.
+  id: string; // Unique identifier for the event.
   userId: string; // Identifier of the user who logged the event.
-  date: string; // Date of the event, stored as a string in ISO format (YYYY-MM-DD).
-  advisorId: string; // Identifier of the advisor associated with this event.
-  taskId?: string; // *** ADD Optional identifier for the task associated with this event ***
-  eventType: StandardEventType; // The category or type of the event, constrained by StandardEventType.
-  eventDetails?: string; // Optional field for additional details, particularly used when eventType is 'Other'.
-  loggedTime: number; // Duration of the event logged, typically in minutes.
+  advisorId: string; // Identifier of the advisor the event is associated with.
+  taskId?: string | null; // Optional identifier of a linked task.
+  date: string; // Date of the event (ISO string format: YYYY-MM-DD).
+  eventType: StandardEventType | string; // Type of event, either predefined or custom.
+  eventDetails?: string | null; // Optional additional details about the event.
+  loggedTime: number; // Time spent in minutes.
 };
+
+
+// Represents the structure for app settings, potentially stored locally.
+export interface AppSettings {
+  theme: 'light' | 'dark' | 'system'; // Current theme preference.
+  // Add other settings as needed
+}
+
+

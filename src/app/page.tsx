@@ -2,20 +2,21 @@
 
 import * as React from 'react';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import type { Advisor, LoggedEvent, Task } from '@/types'; // *** Import Task type ***
+import type { Advisor, LoggedEvent, Task } from '@/types';
 import { AdvisorManager } from '@/components/advisor-manager';
-import { TaskManager } from '@/components/task-manager'; // *** Import TaskManager ***
+import { TaskManager } from '@/components/task-manager';
 import { TimeLogForm } from '@/components/time-log-form';
 import { EventList } from '@/components/event-list';
+import { PolicySearch } from '@/components/policy-search'; // Import PolicySearch
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, ListChecks, Clock, LogOut, BarChart2, AreaChart, ListTodo } from 'lucide-react'; // *** Import ListTodo icon ***
+import { Users, ListChecks, Clock, LogOut, BarChart2, AreaChart, ListTodo, Activity, FileSearch } from 'lucide-react'; // Import FileSearch icon
 import { Button } from '@/components/ui/button';
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged, User, signOut } from 'firebase/auth';
-import { collection, query, where, getDocs, addDoc, deleteDoc, doc, runTransaction, updateDoc } from 'firebase/firestore'; 
+import { collection, query, where, getDocs, addDoc, deleteDoc, doc, runTransaction, updateDoc } from 'firebase/firestore';
 
 import { LoginForm } from '@/components/auth/login-form';
 import { SignUpForm } from '@/components/auth/signup-form';
@@ -26,7 +27,7 @@ export default function Home() {
   // State for Advisors and Events
   const [advisors, setAdvisors] = useState<Advisor[]>([]);
   const [loggedEvents, setLoggedEvents] = useState<LoggedEvent[]>([]);
-  // *** State for Tasks ***
+  // State for Tasks
   const [tasks, setTasks] = useState<Task[]>([]);
 
   // Auth and Loading State
@@ -34,13 +35,13 @@ export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [isLoading, setIsLoading] = useState(true);
-  
+
   // State for UI interaction statuses
   const [isProcessingEvent, setIsProcessingEvent] = useState(false);
   const [isAddingAdvisor, setIsAddingAdvisor] = useState(false);
   const [removingAdvisorId, setRemovingAdvisorId] = useState<string | null>(null);
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
-  // *** Task interaction statuses ***
+  // Task interaction statuses
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [removingTaskId, setRemovingTaskId] = useState<string | null>(null);
 
@@ -51,7 +52,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState('log-time');
   const timeLogFormRef = useRef<HTMLDivElement>(null);
 
-  // *** Updated fetchUserData to include Tasks ***
+  // Updated fetchUserData to include Tasks
   const fetchUserData = useCallback(async (userId: string) => {
     setIsLoading(true);
     try {
@@ -72,7 +73,7 @@ export default function Home() {
       const eventSnapshot = await getDocs(eventsQuery);
       const fetchedEvents = eventSnapshot.docs
           .map(doc => ({ id: doc.id, ...doc.data() } as LoggedEvent))
-          .sort((a, b) => b.date.localeCompare(a.date)); 
+          .sort((a, b) => b.date.localeCompare(a.date));
       setLoggedEvents(fetchedEvents);
 
     } catch (error) {
@@ -85,7 +86,7 @@ export default function Home() {
     } finally {
         setIsLoading(false);
     }
-  }, [toast]); 
+  }, [toast]);
 
   useEffect(() => {
     setIsClient(true);
@@ -99,8 +100,8 @@ export default function Home() {
         setTasks([]); // Reset tasks
         setLoggedEvents([]);
         setIsLoading(false);
-        setEventToEdit(null); 
-        setActiveTab('log-time'); 
+        setEventToEdit(null);
+        setActiveTab('log-time'); // Reset to default tab on logout
       }
     });
     return () => unsubscribe();
@@ -112,7 +113,7 @@ export default function Home() {
     setIsAddingAdvisor(true);
     try {
       await addDoc(collection(db, 'advisors'), { name, userId: user.uid });
-      await fetchUserData(user.uid); 
+      await fetchUserData(user.uid);
     } catch (error) {
       console.error('Error adding advisor:', error);
       toast({ title: "Error", description: "Failed to add advisor.", variant: "destructive" });
@@ -128,20 +129,9 @@ export default function Home() {
           await runTransaction(db, async (transaction) => {
               const advisorRef = doc(db, 'advisors', advisorIdToRemove);
               transaction.delete(advisorRef);
-              // Note: Transactionally updating/deleting associated events based on advisorId
-              // can be complex and might hit transaction limits if many events exist.
-              // Consider if just removing the advisor is sufficient, or handle cleanup differently.
-              // The current implementation only removes the advisor document.
           });
-          // Refresh local state after successful delete
           setAdvisors(prev => prev.filter(a => a.id !== advisorIdToRemove));
-          // Update events locally to remove the advisor association if needed, or just rely on refetch.
-          // For simplicity, we rely on fetchUserData or manual refresh if strict consistency is needed immediately.
-          // Consider adding a specific event query/update here if advisor removal needs instant event cleanup.
-          
           toast({ title: "Success", description: "Advisor removed." });
-          // Optionally refetch all data, or just update advisors locally
-          // await fetchUserData(user.uid); // Could refetch everything
       } catch (error) {
           console.error('Error removing advisor:', error);
           toast({ title: "Error", description: "Failed to remove advisor.", variant: "destructive" });
@@ -156,7 +146,7 @@ export default function Home() {
     setIsAddingTask(true);
     try {
       await addDoc(collection(db, 'tasks'), { name, userId: user.uid });
-      await fetchUserData(user.uid); // Refresh all data
+      await fetchUserData(user.uid);
       toast({ title: "Success", description: `Task "${name}" added.` });
     } catch (error) {
       console.error('Error adding task:', error);
@@ -172,12 +162,8 @@ export default function Home() {
       try {
           const taskRef = doc(db, 'tasks', taskIdToRemove);
           await deleteDoc(taskRef);
-          // Refresh local state
           setTasks(prev => prev.filter(t => t.id !== taskIdToRemove));
-          // Events associated with this task will keep the taskId, but it will no longer resolve to a name.
-          // Consider if you need to update events to remove the taskId upon task deletion.
           toast({ title: "Success", description: "Task removed." });
-          // await fetchUserData(user.uid); // Optionally refetch
       } catch (error) {
           console.error('Error removing task:', error);
           toast({ title: "Error", description: "Failed to remove task.", variant: "destructive" });
@@ -193,10 +179,10 @@ export default function Home() {
     try {
       const eventToAdd = { ...newEvent, userId: user.uid };
       await addDoc(collection(db, 'loggedEvents'), eventToAdd);
-      await fetchUserData(user.uid); 
+      await fetchUserData(user.uid);
     } catch (error) {
       console.error('Error adding log event:', error);
-      throw error; // Re-throw for form handling
+      throw error;
     } finally {
       setIsProcessingEvent(false);
     }
@@ -207,13 +193,13 @@ export default function Home() {
       setIsProcessingEvent(true);
       try {
           const eventRef = doc(db, 'loggedEvents', eventId);
-          const dataToUpdate = { ...eventData, userId: user.uid }; // Ensure userId is included
+          const dataToUpdate = { ...eventData, userId: user.uid };
           await updateDoc(eventRef, dataToUpdate);
-          await fetchUserData(user.uid); 
-          setEventToEdit(null); 
+          await fetchUserData(user.uid);
+          setEventToEdit(null);
       } catch (error) {
           console.error('Error updating event:', error);
-          throw error; // Re-throw for form handling
+          throw error;
       } finally {
           setIsProcessingEvent(false);
       }
@@ -226,11 +212,10 @@ export default function Home() {
             const eventRef = doc(db, 'loggedEvents', eventIdToDelete);
             await deleteDoc(eventRef);
             setLoggedEvents(prevEvents => prevEvents.filter(event => event.id !== eventIdToDelete));
-            // Toast is handled in EventList upon promise resolution
         } catch (error) {
             console.error('handleDeleteEvent: Error during delete:', error);
             toast({ title: "Error", description: "Failed to delete event.", variant: "destructive" });
-            throw error; // Re-throw for list handling
+            throw error;
         } finally {
             setDeletingEventId(null);
         }
@@ -238,7 +223,7 @@ export default function Home() {
 
    const handleEditEventStart = (event: LoggedEvent) => {
        setEventToEdit(event);
-       setActiveTab('log-time'); 
+       setActiveTab('log-time');
        setTimeout(() => {
            timeLogFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
        }, 100);
@@ -252,7 +237,6 @@ export default function Home() {
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      // State reset is handled by onAuthStateChanged
     } catch (error) {
       console.error('Logout Error:', error);
       toast({ title: "Logout Error", description: "An error occurred during logout.", variant: "destructive" });
@@ -298,7 +282,7 @@ export default function Home() {
       <header className="mb-4 relative flex justify-center items-center pt-2 pb-2">
          <div className="text-center">
            <h1 className="text-3xl md:text-4xl font-bold text-primary flex items-center justify-center gap-2">
-             <Clock className="h-8 w-8" /> CX Time Logger
+             <Activity className="h-8 w-8" /> Tempo
            </h1>
            <p className="text-muted-foreground mt-1 text-center">Track your time effectively.</p>
         </div>
@@ -310,9 +294,9 @@ export default function Home() {
          </div>
       </header>
 
-      {/* *** Update grid columns for new Task tab *** */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-6 mb-6 bg-secondary rounded-lg p-1"> {/* Changed grid-cols-5 to grid-cols-6 */} 
+        {/* Updated grid columns for the new Policy Search tab */}
+        <TabsList className="grid w-full grid-cols-7 mb-6 bg-secondary rounded-lg p-1"> 
           <TabsTrigger value="log-time" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
              <Clock className="mr-2 h-4 w-4" /> {eventToEdit ? 'Edit Event' : 'Log Time'}
           </TabsTrigger>
@@ -325,13 +309,16 @@ export default function Home() {
            <TabsTrigger value="visualizations" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               <AreaChart className="mr-2 h-4 w-4" /> Visualizations
            </TabsTrigger>
-          <TabsTrigger value="manage-advisors" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-             <Users className="mr-2 h-4 w-4" /> Manage Advisors
-          </TabsTrigger>
-           {/* *** Add Manage Tasks Tab Trigger *** */}
+           {/* Add Policy Search Tab Trigger */}
+           <TabsTrigger value="policy-search" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              <FileSearch className="mr-2 h-4 w-4" /> Policy Search
+           </TabsTrigger>
            <TabsTrigger value="manage-tasks" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               <ListTodo className="mr-2 h-4 w-4" /> Manage Tasks
            </TabsTrigger>
+           <TabsTrigger value="manage-advisors" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+             <Users className="mr-2 h-4 w-4" /> Manage Advisors
+          </TabsTrigger>
         </TabsList>
 
         {/* Log Time / Edit Time Tab */}
@@ -339,12 +326,12 @@ export default function Home() {
            <div ref={timeLogFormRef}>
              <TimeLogForm
                advisors={advisors}
-               tasks={tasks} // *** Pass tasks to TimeLogForm ***
+               tasks={tasks}
                onLogEvent={handleLogEvent}
-               onUpdateEvent={handleUpdateEvent} 
-               onCancelEdit={handleCancelEdit}   
-               eventToEdit={eventToEdit}       
-               isSubmitting={isProcessingEvent} 
+               onUpdateEvent={handleUpdateEvent}
+               onCancelEdit={handleCancelEdit}
+               eventToEdit={eventToEdit}
+               isSubmitting={isProcessingEvent}
              />
            </div>
         </TabsContent>
@@ -354,31 +341,47 @@ export default function Home() {
            <EventList
              events={loggedEvents}
              advisors={advisors}
-             tasks={tasks} // *** Pass tasks to EventList ***
+             tasks={tasks}
              onDeleteEvent={handleDeleteEvent}
-             onEditEvent={handleEditEventStart} 
+             onEditEvent={handleEditEventStart}
              deletingId={deletingEventId}
            />
         </TabsContent>
 
         {/* Reports Tab */}
          <TabsContent value="reports">
-             <ReportSection 
-                loggedEvents={loggedEvents} 
-                advisors={advisors} 
-                tasks={tasks} // *** Pass tasks to ReportSection ***
+             <ReportSection
+                loggedEvents={loggedEvents}
+                advisors={advisors}
+                tasks={tasks}
               />
          </TabsContent>
 
         {/* Visualizations Tab */}
         <TabsContent value="visualizations">
-            <VisualizationsSection 
-                loggedEvents={loggedEvents} 
-                advisors={advisors} 
-                tasks={tasks} // *** Pass tasks to VisualizationsSection ***
+            <VisualizationsSection
+                loggedEvents={loggedEvents}
+                advisors={advisors}
+                tasks={tasks}
             />
          </TabsContent>
 
+        {/* Policy Search Tab */}
+        <TabsContent value="policy-search">
+            <PolicySearch />
+        </TabsContent>
+
+        {/* Manage Tasks Tab Content */}
+        <TabsContent value="manage-tasks">
+            <TaskManager
+                tasks={tasks}
+                onAddTask={handleAddTask}
+                onRemoveTask={handleRemoveTask}
+                isAdding={isAddingTask}
+                removingId={removingTaskId}
+            />
+        </TabsContent>
+        
         {/* Manage Advisors Tab */}
         <TabsContent value="manage-advisors">
           <AdvisorManager
@@ -388,17 +391,6 @@ export default function Home() {
             isAdding={isAddingAdvisor}
             removingId={removingAdvisorId}
           />
-        </TabsContent>
-
-        {/* *** Add Manage Tasks Tab Content *** */}
-        <TabsContent value="manage-tasks">
-            <TaskManager
-                tasks={tasks}
-                onAddTask={handleAddTask}
-                onRemoveTask={handleRemoveTask}
-                isAdding={isAddingTask}
-                removingId={removingTaskId}
-            />
         </TabsContent>
       </Tabs>
     </main>

@@ -2,9 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: Arial, Helvetica, sans-serif;
-}
+/* Removed body font-family here, now handled by layout.tsx and tailwind.config.ts */
 
 @layer base {
   :root {
@@ -55,56 +53,54 @@ body {
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
-  .dark {
-    /* New Dark Palette (Slate/Zinc Inspired) */
-    --background: 222 47.4% 11.2%; /* Dark Slate */
-    --foreground: 210 40% 98%; /* Almost White */
+/* Premium Dark Theme Adjustments */
+.dark {
+    --background: 220 15% 5%; /* Very dark, slightly cool gray/black */
+    --foreground: 210 20% 95%; /* Off-white, less stark */
 
-    --card: 222 47.4% 14.2%; /* Slightly Lighter Dark Slate */
-    --card-foreground: 210 40% 98%;
+    --card: 220 14% 10%; /* Slightly lighter than background */
+    --card-foreground: 210 20% 95%; /* Match main foreground */
 
-    --popover: 224 71.4% 4.1%; /* Very Dark Slate/Black */
-    --popover-foreground: 210 40% 98%;
+    --popover: 220 16% 8%; /* Similar to card, slightly darker */
+    --popover-foreground: 210 20% 95%;
 
-    --primary: 217.2 91.2% 59.8%; /* Brighter Blue */
-    --primary-foreground: 210 40% 98%;
+    --primary: 215 80% 65%; /* Softer, less saturated blue */
+    --primary-foreground: 220 10% 10%; /* Dark foreground for contrast on primary */
 
-    --secondary: 217.2 32.6% 17.5%; /* Dark Blue/Gray */
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 215 20% 18%; /* Subtle dark gray-blue */
+    --secondary-foreground: 210 20% 85%; /* Lighter gray for secondary text */
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%; /* Lighter Gray */
+    --muted: 215 20% 15%; /* Darker muted background */
+    --muted-foreground: 215 15% 55%; /* Readable gray for muted text */
 
-    --accent: 217.2 32.6% 22.5%; /* Slightly Lighter Dark Blue/Gray */
-    --accent-foreground: 210 40% 98%;
+    --accent: 215 20% 22%; /* Slightly lighter accent for hover/focus */
+    --accent-foreground: 210 20% 95%; /* Match main foreground for accents */
 
-    --destructive: 0 62.8% 30.6%; /* Darker Red */
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 70% 55%; /* Slightly deeper red */
+    --destructive-foreground: 210 20% 95%;
 
-    --border: 217.2 32.6% 20.5%; /* Dark Blue/Gray Border */
-    --input: 217.2 32.6% 20.5%;
-    --ring: 217.2 91.2% 59.8%; /* Brighter Blue Ring */
+    --border: 215 15% 18%; /* Subtle border, visible against background/card */
+    --input: 215 15% 18%; /* Match border */
+    --ring: 215 80% 75%; /* Brighter blue for focus rings */
 
-    /* Ensure radius is defined for dark mode too if needed, though usually inherited */
-    /* --radius: 0.5rem; */ 
+    /* Adjust chart colors if needed for better contrast/appeal */
+    --chart-1: 215 70% 60%; /* Adjusted Blue */
+    --chart-2: 160 60% 55%; /* Teal/Green */
+    --chart-3: 30 80% 65%;  /* Orange */
+    --chart-4: 280 65% 70%; /* Purple */
+    --chart-5: 340 75% 65%; /* Pink/Red */
 
-    /* Adjust chart colors for dark mode */
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+    /* Sidebar adjustments */
+    --sidebar-background: 220 15% 8%; /* Slightly different dark bg */
+    --sidebar-foreground: 210 20% 95%;
+    --sidebar-primary: 215 80% 65%; /* Match main primary */
+    --sidebar-primary-foreground: 220 10% 10%;
+    --sidebar-accent: 215 20% 25%; /* Slightly lighter accent for sidebar items */
+    --sidebar-accent-foreground: 210 20% 95%;
+    --sidebar-border: 215 15% 18%; /* Match main border */
+    --sidebar-ring: 215 80% 75%; /* Match main ring */
+}
 
-    /* Adjust sidebar colors for dark mode */
-    --sidebar-background: 222 47.4% 11.2%; /* Same as main background */
-    --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 217.2 91.2% 59.8%; /* Primary blue */
-    --sidebar-primary-foreground: 210 40% 98%;
-    --sidebar-accent: 217.2 32.6% 22.5%; /* Accent gray */
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 217.2 32.6% 20.5%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
-  }
 }
 
 @layer base {
