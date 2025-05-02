@@ -1,6 +1,7 @@
+
 'use client';
 
-// Remove Task from import
+// Removed Task from import
 import type { LoggedEvent, Advisor } from '@/types';
 import * as React from 'react';
 import { useState, useMemo } from 'react';
@@ -24,7 +25,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger, // Import AlertDialogTrigger
+  AlertDialogTrigger, // Keep AlertDialogTrigger import
 } from "@/components/ui/alert-dialog";
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { DateRange } from "react-day-picker";
@@ -45,7 +46,8 @@ const getTodayDateString = (): string => {
 interface EventListProps {
   events: LoggedEvent[];
   advisors: Advisor[];
-  // tasks: Task[]; // Removed
+  // Removed tasks prop
+  // tasks: Task[];
   onDeleteEvent: (eventId: string) => Promise<void>;
   onEditEvent: (event: LoggedEvent) => void;
   deletingId: string | null;
@@ -67,7 +69,8 @@ export function EventList({
   const [searchTerm, setSearchTerm] = useState('');
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [selectedAdvisorId, setSelectedAdvisorId] = useState<string | 'all'>('all');
-  // const [selectedTaskId, setSelectedTaskId] = useState<string | 'all'>('all'); // Removed Task Filter State
+  // Removed Task Filter State
+  // const [selectedTaskId, setSelectedTaskId] = useState<string | 'all'>('all');
   const [sortCriteria, setSortCriteria] = useState<SortCriteria>('date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [showOnlyToday, setShowOnlyToday] = useState<boolean>(false); // State for Today's view
@@ -80,7 +83,7 @@ export function EventList({
     }, {} as Record<string, string>);
   }, [advisors]);
 
-  // const taskMap = useMemo(() => { ... }); // Removed taskMap
+  // Removed taskMap
 
   const filteredEvents = useMemo(() => {
     let filtered = events;
@@ -118,7 +121,7 @@ export function EventList({
           const lowerCaseSearchTerm = searchTerm.toLowerCase();
           filtered = filtered.filter(event => {
             const advisorName = advisorMap[event.advisorId]?.toLowerCase() || '';
-            // const taskName = event.taskId ? taskMap[event.taskId]?.toLowerCase() || '' : ''; // Removed task name search
+            // Removed task name search
             const eventType = event.eventType?.toLowerCase() || '';
             const eventDetails = event.eventDetails?.toLowerCase() || '';
             return (
@@ -140,7 +143,7 @@ export function EventList({
      const sorted = [...filteredEvents].sort((a, b) => {
         let comparison = 0;
         try {
-            // Remove 'task' case
+            // Removed 'task' case
             switch (sortCriteria) {
                 case 'date':
                     const dateA = parseISO(a.date || '').getTime();
@@ -173,11 +176,11 @@ export function EventList({
       if (event.eventType === 'Other' && event.eventDetails) {
           return `Other (${event.eventDetails.substring(0, 30)}${event.eventDetails.length > 30 ? '...' : ''})`;
       }
-      return event.eventType;
+      // Use the eventType itself if not 'Other' or no details
+      return typeof event.eventType === 'string' ? event.eventType : 'Unknown Event';
    };
 
   const handleDelete = async (event: LoggedEvent) => {
-    // ... (delete logic remains the same)
     if (deletingId) return;
     const displayTitle = getEventDisplayTitle(event);
     try {
@@ -187,7 +190,6 @@ export function EventList({
   }
 
   const handleEdit = (event: LoggedEvent) => {
-      // ... (edit logic remains the same)
       if (deletingId) return;
       onEditEvent(event);
   }
@@ -261,7 +263,7 @@ export function EventList({
                         <SelectContent>
                             <SelectItem value="date">Date</SelectItem>
                             <SelectItem value="advisor">Advisor</SelectItem>
-                            {/* <SelectItem value="task">Task</SelectItem> Removed */}
+                            {/* Removed task sort option */}
                             <SelectItem value="eventType">Event Type</SelectItem>
                             <SelectItem value="loggedTime">Time Logged</SelectItem>
                         </SelectContent>
@@ -294,7 +296,7 @@ export function EventList({
                     {/* Remove Task Header */}
                     <TableHead className="w-[110px]">Date</TableHead>
                     <TableHead>Advisor</TableHead>
-                    {/* <TableHead>Task</TableHead> Removed */}
+                    {/* Removed Task Header */}
                     <TableHead>Event Type / Details</TableHead>
                     <TableHead className="w-[100px] text-right">Time (min)</TableHead>
                     <TableHead className="w-[100px] text-right">Actions</TableHead>
@@ -303,8 +305,8 @@ export function EventList({
                 <TableBody>
                 {sortedEvents.length === 0 ? (
                     <TableRow>
-                    {/* Update colSpan */}
-                    <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                    {/* Updated colSpan */}
+                    <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
                         {showOnlyToday
                             ? 'No events logged today yet.'
                             : (regularFiltersActive ? 'No events found for the selected filters.' : 'No events logged yet.')
@@ -315,21 +317,20 @@ export function EventList({
                     sortedEvents.map((event) => {
                         const isDeletingThis = deletingId === event.id;
                         const displayTitle = getEventDisplayTitle(event);
-                        // const taskName = event.taskId ? taskMap[event.taskId] : null; // Removed
+                        // Removed taskName variable
 
                         return (
                         <TableRow key={event.id} className={cn(isDeletingThis && "opacity-50")}>
                             <TableCell> {event.date ? format(parseISO(event.date), 'MMM dd, yyyy') : 'Invalid Date'} </TableCell>
                             <TableCell>{advisorMap[event.advisorId] || 'Unknown Advisor'}</TableCell>
                             {/* Removed Task Cell */}
-                            {/* <TableCell> ... </TableCell> */}
                             <TableCell>
                                 {event.eventType === 'Other' && event.eventDetails ? (
                                     <Tooltip delayDuration={300}>
                                         <TooltipTrigger className="cursor-help underline decoration-dotted"> {event.eventType}* </TooltipTrigger>
                                         <TooltipContent className="max-w-xs break-words"> <p>{event.eventDetails}</p> </TooltipContent>
                                     </Tooltip>
-                                ) : ( event.eventType || 'N/A' )}
+                                ) : ( typeof event.eventType === 'string' ? event.eventType : 'N/A' )}
                             </TableCell>
                             <TableCell className="text-right">{event.loggedTime || 0} min</TableCell>
                             <TableCell className="text-right space-x-1">
@@ -357,7 +358,7 @@ export function EventList({
                 </TableBody>
             </Table>
             </ScrollArea>
-            {/* Remove tasks prop from TimeLogSummary */}
+            {/* Removed tasks prop from TimeLogSummary */}
             <div className='mt-8'>
                 <TimeLogSummary loggedEvents={sortedEvents} advisors={advisors} />
             </div>

@@ -1,15 +1,18 @@
+
 'use client';
 
 import * as React from 'react';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import type { Advisor, LoggedEvent, Task } from '@/types';
+// Removed Task type import
+import type { Advisor, LoggedEvent } from '@/types';
 import { AdvisorManager } from '@/components/advisor-manager';
-import { TaskManager } from '@/components/task-manager';
+// Removed TaskManager import
 import { TimeLogForm } from '@/components/time-log-form';
 import { EventList } from '@/components/event-list';
 import { PolicySearch } from '@/components/policy-search'; // Import PolicySearch
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, ListChecks, Clock, LogOut, BarChart2, AreaChart, ListTodo, Activity, FileSearch } from 'lucide-react'; // Import FileSearch icon
+// Removed ListTodo icon
+import { Users, ListChecks, Clock, LogOut, BarChart2, AreaChart, Activity, FileSearch } from 'lucide-react'; // Import FileSearch icon
 import { Button } from '@/components/ui/button';
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -27,8 +30,8 @@ export default function Home() {
   // State for Advisors and Events
   const [advisors, setAdvisors] = useState<Advisor[]>([]);
   const [loggedEvents, setLoggedEvents] = useState<LoggedEvent[]>([]);
-  // State for Tasks
-  const [tasks, setTasks] = useState<Task[]>([]);
+  // Removed State for Tasks
+  // const [tasks, setTasks] = useState<Task[]>([]);
 
   // Auth and Loading State
   const [isClient, setIsClient] = useState(false);
@@ -41,9 +44,9 @@ export default function Home() {
   const [isAddingAdvisor, setIsAddingAdvisor] = useState(false);
   const [removingAdvisorId, setRemovingAdvisorId] = useState<string | null>(null);
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
-  // Task interaction statuses
-  const [isAddingTask, setIsAddingTask] = useState(false);
-  const [removingTaskId, setRemovingTaskId] = useState<string | null>(null);
+  // Removed Task interaction statuses
+  // const [isAddingTask, setIsAddingTask] = useState(false);
+  // const [removingTaskId, setRemovingTaskId] = useState<string | null>(null);
 
   const { toast } = useToast();
 
@@ -52,7 +55,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState('log-time');
   const timeLogFormRef = useRef<HTMLDivElement>(null);
 
-  // Updated fetchUserData to include Tasks
+  // Updated fetchUserData to remove Tasks
   const fetchUserData = useCallback(async (userId: string) => {
     setIsLoading(true);
     try {
@@ -62,11 +65,11 @@ export default function Home() {
       const fetchedAdvisors = advisorSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Advisor));
       setAdvisors(fetchedAdvisors);
 
-      // Fetch Tasks
-      const tasksQuery = query(collection(db, 'tasks'), where('userId', '==', userId));
-      const taskSnapshot = await getDocs(tasksQuery);
-      const fetchedTasks = taskSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task));
-      setTasks(fetchedTasks);
+      // Removed Fetch Tasks
+      // const tasksQuery = query(collection(db, 'tasks'), where('userId', '==', userId));
+      // const taskSnapshot = await getDocs(tasksQuery);
+      // const fetchedTasks = taskSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task));
+      // setTasks(fetchedTasks);
 
       // Fetch Logged Events
       const eventsQuery = query(collection(db, 'loggedEvents'), where('userId', '==', userId));
@@ -81,7 +84,8 @@ export default function Home() {
       toast({ title: "Error Fetching Data", description: "Could not load user data.", variant: "destructive" });
        // Reset state on error to avoid partial data display
        setAdvisors([]);
-       setTasks([]);
+       // Removed reset tasks
+       // setTasks([]);
        setLoggedEvents([]);
     } finally {
         setIsLoading(false);
@@ -97,7 +101,8 @@ export default function Home() {
       } else {
         // Reset all user-specific state on logout
         setAdvisors([]);
-        setTasks([]); // Reset tasks
+        // Removed reset tasks
+        // setTasks([]);
         setLoggedEvents([]);
         setIsLoading(false);
         setEventToEdit(null);
@@ -140,37 +145,10 @@ export default function Home() {
       }
   };
 
-  // *** Task Handlers ***
-  const handleAddTask = async (name: string) => {
-    if (!user || isAddingTask) return;
-    setIsAddingTask(true);
-    try {
-      await addDoc(collection(db, 'tasks'), { name, userId: user.uid });
-      await fetchUserData(user.uid);
-      toast({ title: "Success", description: `Task "${name}" added.` });
-    } catch (error) {
-      console.error('Error adding task:', error);
-      toast({ title: "Error", description: "Failed to add task.", variant: "destructive" });
-    } finally {
-      setIsAddingTask(false);
-    }
-  };
+  // *** Removed Task Handlers ***
+  // const handleAddTask = async (name: string) => { ... };
+  // const handleRemoveTask = async (taskIdToRemove: string) => { ... };
 
-  const handleRemoveTask = async (taskIdToRemove: string) => {
-      if (!user || removingTaskId) return;
-      setRemovingTaskId(taskIdToRemove);
-      try {
-          const taskRef = doc(db, 'tasks', taskIdToRemove);
-          await deleteDoc(taskRef);
-          setTasks(prev => prev.filter(t => t.id !== taskIdToRemove));
-          toast({ title: "Success", description: "Task removed." });
-      } catch (error) {
-          console.error('Error removing task:', error);
-          toast({ title: "Error", description: "Failed to remove task.", variant: "destructive" });
-      } finally {
-          setRemovingTaskId(null);
-      }
-  };
 
   // --- Event Handlers (Create, Update, Delete, Edit) ---
   const handleLogEvent = async (newEvent: Omit<LoggedEvent, 'userId' | 'id'>): Promise<void> => {
@@ -295,8 +273,8 @@ export default function Home() {
       </header>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        {/* Updated grid columns for the new Policy Search tab */}
-        <TabsList className="grid w-full grid-cols-7 mb-6 bg-secondary rounded-lg p-1"> 
+        {/* Updated grid columns to 6 after removing Tasks tab */}
+        <TabsList className="grid w-full grid-cols-6 mb-6 bg-secondary rounded-lg p-1">
           <TabsTrigger value="log-time" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
              <Clock className="mr-2 h-4 w-4" /> {eventToEdit ? 'Edit Event' : 'Log Time'}
           </TabsTrigger>
@@ -313,9 +291,10 @@ export default function Home() {
            <TabsTrigger value="policy-search" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               <FileSearch className="mr-2 h-4 w-4" /> Policy Search
            </TabsTrigger>
-           <TabsTrigger value="manage-tasks" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+           {/* Removed Manage Tasks Tab Trigger */}
+           {/* <TabsTrigger value="manage-tasks" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               <ListTodo className="mr-2 h-4 w-4" /> Manage Tasks
-           </TabsTrigger>
+           </TabsTrigger> */}
            <TabsTrigger value="manage-advisors" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
              <Users className="mr-2 h-4 w-4" /> Manage Advisors
           </TabsTrigger>
@@ -326,7 +305,8 @@ export default function Home() {
            <div ref={timeLogFormRef}>
              <TimeLogForm
                advisors={advisors}
-               tasks={tasks}
+               // Removed tasks prop
+               // tasks={tasks}
                onLogEvent={handleLogEvent}
                onUpdateEvent={handleUpdateEvent}
                onCancelEdit={handleCancelEdit}
@@ -341,7 +321,8 @@ export default function Home() {
            <EventList
              events={loggedEvents}
              advisors={advisors}
-             tasks={tasks}
+             // Removed tasks prop
+             // tasks={tasks}
              onDeleteEvent={handleDeleteEvent}
              onEditEvent={handleEditEventStart}
              deletingId={deletingEventId}
@@ -353,7 +334,8 @@ export default function Home() {
              <ReportSection
                 loggedEvents={loggedEvents}
                 advisors={advisors}
-                tasks={tasks}
+                // Removed tasks prop
+                // tasks={tasks}
               />
          </TabsContent>
 
@@ -362,7 +344,8 @@ export default function Home() {
             <VisualizationsSection
                 loggedEvents={loggedEvents}
                 advisors={advisors}
-                tasks={tasks}
+                // Removed tasks prop
+                // tasks={tasks}
             />
          </TabsContent>
 
@@ -371,8 +354,8 @@ export default function Home() {
             <PolicySearch />
         </TabsContent>
 
-        {/* Manage Tasks Tab Content */}
-        <TabsContent value="manage-tasks">
+        {/* Removed Manage Tasks Tab Content */}
+        {/* <TabsContent value="manage-tasks">
             <TaskManager
                 tasks={tasks}
                 onAddTask={handleAddTask}
@@ -380,8 +363,8 @@ export default function Home() {
                 isAdding={isAddingTask}
                 removingId={removingTaskId}
             />
-        </TabsContent>
-        
+        </TabsContent> */}
+
         {/* Manage Advisors Tab */}
         <TabsContent value="manage-advisors">
           <AdvisorManager

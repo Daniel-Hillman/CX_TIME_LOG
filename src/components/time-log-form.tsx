@@ -1,7 +1,9 @@
+
 'use client';
 
 import { standardEventTypes } from '@/types';
-import type { Advisor, LoggedEvent, StandardEventType, Task } from '@/types';
+// Removed Task type import
+import type { Advisor, LoggedEvent, StandardEventType } from '@/types';
 import React, { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -16,15 +18,17 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
-import { CalendarIcon, Clock, PlusCircle, Loader2, Save, X, ListChecks, ListTodo } from 'lucide-react';
+// Removed ListTodo icon
+import { CalendarIcon, Clock, PlusCircle, Loader2, Save, X, ListChecks } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
-// Zod schema remains the same (taskId is optional string)
+// Zod schema updated to remove taskId
 const formSchema = z.object({
   date: z.date({ required_error: "A date is required." }),
   advisorId: z.string({ required_error: "Please select an advisor." }).min(1, "Please select an advisor."),
-  taskId: z.string().optional(), // Task ID is optional
+  // Removed taskId field
+  // taskId: z.string().optional(),
   eventType: z.enum(standardEventTypes, { required_error: "Please select an event type." }),
   eventDetails: z.string().optional(),
   loggedTime: z.number({ required_error: "Please select logged time." }).min(1, { message: "Time must be at least 1 minute." }),
@@ -42,9 +46,10 @@ type TimeLogFormData = z.infer<typeof formSchema>;
 
 interface TimeLogFormProps {
   advisors: Advisor[];
-  tasks: Task[];
-  onLogEvent: (event: Omit<LoggedEvent, 'userId' | 'id' | 'eventType' | 'taskId'> & { eventType: StandardEventType; taskId?: string }) => Promise<void>;
-  onUpdateEvent: (eventId: string, eventData: Omit<LoggedEvent, 'userId' | 'id' | 'eventType' | 'taskId'> & { eventType: StandardEventType; taskId?: string }) => Promise<void>;
+  // Removed tasks prop
+  // tasks: Task[];
+  onLogEvent: (event: Omit<LoggedEvent, 'userId' | 'id' | 'eventType' | 'taskId'> & { eventType: StandardEventType; /* taskId?: string */ }) => Promise<void>;
+  onUpdateEvent: (eventId: string, eventData: Omit<LoggedEvent, 'userId' | 'id' | 'eventType' | 'taskId'> & { eventType: StandardEventType; /* taskId?: string */ }) => Promise<void>;
   onCancelEdit: () => void;
   eventToEdit?: Omit<LoggedEvent, 'eventType'> & { eventType: StandardEventType } | null;
   isSubmitting: boolean;
@@ -52,11 +57,11 @@ interface TimeLogFormProps {
 
 const logTimeOptions = [5, 10, 15, 30, 45, 60, 90, 120];
 
-// *** Use undefined for taskId initial default ***
+// *** Updated initial default values to remove taskId ***
 const initialDefaultValues: Omit<TimeLogFormData, 'date'> & { date: Date | undefined } = {
     date: undefined, // Will be set to new Date() later
     advisorId: '',
-    taskId: undefined,
+    // taskId: undefined, // Removed
     eventType: standardEventTypes[0],
     eventDetails: '',
     loggedTime: 0,
@@ -64,7 +69,7 @@ const initialDefaultValues: Omit<TimeLogFormData, 'date'> & { date: Date | undef
 
 export function TimeLogForm({
     advisors,
-    tasks,
+    // tasks, // Removed
     onLogEvent,
     onUpdateEvent,
     onCancelEdit,
@@ -74,14 +79,14 @@ export function TimeLogForm({
   const { toast } = useToast();
   const isEditMode = !!eventToEdit;
 
-  // *** Update defaultValues logic to use undefined for taskId ***
+  // *** Update defaultValues logic to remove taskId ***
   const form = useForm<TimeLogFormData>({
     resolver: zodResolver(formSchema),
     defaultValues: eventToEdit
       ? {
           date: parseISO(eventToEdit.date),
           advisorId: eventToEdit.advisorId,
-          taskId: eventToEdit.taskId || undefined, // Use undefined if no taskId
+          // taskId: eventToEdit.taskId || undefined, // Removed
           eventType: eventToEdit.eventType,
           eventDetails: eventToEdit.eventDetails || '',
           loggedTime: eventToEdit.loggedTime,
@@ -92,19 +97,19 @@ export function TimeLogForm({
 
   const watchedEventType = form.watch('eventType');
 
-  // *** Update useEffect hook reset logic for taskId ***
+  // *** Update useEffect hook reset logic to remove taskId ***
   useEffect(() => {
     if (eventToEdit) {
       form.reset({
         date: parseISO(eventToEdit.date),
         advisorId: eventToEdit.advisorId,
-        taskId: eventToEdit.taskId || undefined, // Reset taskId to undefined if not present
+        // taskId: eventToEdit.taskId || undefined, // Removed
         eventType: eventToEdit.eventType,
         eventDetails: eventToEdit.eventDetails || '',
         loggedTime: eventToEdit.loggedTime,
       });
     } else {
-       form.reset({ ...initialDefaultValues, date: new Date() }); // Resets taskId to undefined
+       form.reset({ ...initialDefaultValues, date: new Date() }); // No longer resets taskId
     }
   }, [eventToEdit, form]);
 
@@ -114,13 +119,13 @@ export function TimeLogForm({
        return;
     }
 
-    // *** Ensure eventData correctly handles potentially undefined taskId ***
-    const eventData: Omit<LoggedEvent, 'userId' | 'id' | 'eventType' | 'taskId'> & { eventType: StandardEventType; taskId?: string } = {
+    // *** Update eventData to remove taskId ***
+    const eventData: Omit<LoggedEvent, 'userId' | 'id' | 'eventType' | 'taskId'> & { eventType: StandardEventType; /* taskId?: string */ } = {
       date: format(values.date, 'yyyy-MM-dd'),
       advisorId: values.advisorId,
       eventType: values.eventType,
-      // Include taskId only if it's a truthy string
-      ...(values.taskId && { taskId: values.taskId }),
+      // Removed taskId handling
+      // ...(values.taskId && { taskId: values.taskId }),
       ...(values.eventType === 'Other' && values.eventDetails && typeof values.eventDetails === 'string' && { eventDetails: values.eventDetails.trim() }),
       loggedTime: values.loggedTime,
     };
@@ -129,7 +134,7 @@ export function TimeLogForm({
         delete (eventData as Partial<typeof eventData>).eventDetails;
     }
 
-    // No need to explicitly delete taskId if undefined, spread operator handles it
+    // No need to explicitly delete taskId
 
     try {
       if (isEditMode && eventToEdit) {
@@ -139,7 +144,7 @@ export function TimeLogForm({
       } else {
         await onLogEvent(eventData);
          toast({ title: "Success", description: "Time logged successfully." });
-         form.reset({ ...initialDefaultValues, date: new Date() }); // Resets taskId to undefined
+         form.reset({ ...initialDefaultValues, date: new Date() }); // No longer resets taskId
       }
 
     } catch (error) {
@@ -236,8 +241,9 @@ export function TimeLogForm({
               />
             </div>
 
-             {/* Row 2: Event Type and Task */}
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+             {/* Row 2: Event Type and Logged Time (Task Removed) */}
+             {/* Updated grid layout to 1 or 2 columns depending on 'Other' event type */}
+             <div className={cn("grid grid-cols-1 gap-4", watchedEventType === 'Other' ? "" : "md:grid-cols-2")}>
                 {/* Event Type Field */}
                 <FormField
                     control={form.control}
@@ -265,49 +271,15 @@ export function TimeLogForm({
                     )}
                     />
 
-                {/* Task Field (Optional) */}
-                <FormField
-                    control={form.control}
-                    name="taskId"
-                    render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>Task <span className="text-xs text-muted-foreground">(Optional)</span></FormLabel>
-                        {/* Pass field.value || '' to Select to avoid controlled/uncontrolled warning when undefined */}
-                        <Select onValueChange={field.onChange} value={field.value || ''} disabled={isSubmitting}>
-                        <FormControl>
-                            <SelectTrigger>
-                               <ListTodo className="mr-2 h-4 w-4 text-muted-foreground" />
-                                {/* The placeholder will show when value is '' (or undefined handled by || '') */}
-                                <SelectValue placeholder="Select a task (optional)" />
-                            </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                             {/* *** REMOVED <SelectItem value="">No Task</SelectItem> *** */}
-                             {tasks.length === 0 ? (
-                                <SelectItem value="-" disabled>No tasks available</SelectItem>
-                            ) : (
-                            tasks.map((task) => (
-                                <SelectItem key={task.id} value={task.id}>
-                                {task.name}
-                                </SelectItem>
-                            ))
-                            )}
-                        </SelectContent>
-                        </Select>
-                        <FormMessage />
-                    </FormItem>
-                    )}
-                />
-             </div>
+                {/* Removed Task Field */}
+                {/* <FormField ... taskId ... /> */}
 
-            {/* Row 3: Logged Time and Conditional Event Details */}
-            <div className={cn("grid grid-cols-1 gap-4", watchedEventType === 'Other' ? "md:grid-cols-1" : "md:grid-cols-2")} >
-                {/* Logged Time Field */}
+                {/* Logged Time Field (Now in Row 2 if event type is not 'Other') */}
                 <FormField
                   control={form.control}
                   name="loggedTime"
                   render={({ field }) => (
-                    <FormItem className={cn(watchedEventType === 'Other' && 'md:col-span-1')}>
+                    <FormItem>
                       <FormLabel>Time Logged (minutes)</FormLabel>
                        <Select
                            onValueChange={(value) => {
@@ -336,30 +308,31 @@ export function TimeLogForm({
                     </FormItem>
                   )}
                 />
+             </div>
 
-                {/* Conditional Event Details */}
-                {watchedEventType === 'Other' && (
-                    <FormField
-                        control={form.control}
-                        name="eventDetails"
-                        render={({ field }) => (
-                        <FormItem className="md:col-span-2">
-                            <FormLabel>Details for &quot;Other&quot;</FormLabel>
-                            <FormControl>
-                            <Textarea
-                                placeholder="Please specify the details for the 'Other' event..."
-                                {...field}
-                                value={field.value || ''}
-                                disabled={isSubmitting}
-                                rows={3}
-                            />
-                            </FormControl>
-                            <FormMessage />
-                        </FormItem>
-                        )}
-                    />
-                )}
-            </div>
+            {/* Conditional Event Details (Row 3, only if Event Type is Other) */}
+            {watchedEventType === 'Other' && (
+                <FormField
+                    control={form.control}
+                    name="eventDetails"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Details for &quot;Other&quot;</FormLabel>
+                        <FormControl>
+                        <Textarea
+                            placeholder="Please specify the details for the 'Other' event..."
+                            {...field}
+                            value={field.value || ''}
+                            disabled={isSubmitting}
+                            rows={3}
+                        />
+                        </FormControl>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
+            )}
+
 
             {/* Footer Buttons */}
             <CardFooter className={cn("p-0 pt-4 flex gap-2", isEditMode ? "justify-between" : "justify-end")}>

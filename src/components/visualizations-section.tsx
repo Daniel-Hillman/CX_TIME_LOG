@@ -1,3 +1,4 @@
+
 'use client';
 
 // Removed Task from import
@@ -38,7 +39,7 @@ ChartJS.register(
 interface VisualizationsSectionProps {
   loggedEvents: LoggedEvent[];
   advisors: Advisor[];
-  // tasks: Task[]; // Removed
+  // Removed tasks prop
 }
 
 type TimeRangePreset = 'day' | 'week' | 'last7' | 'last30' | 'month' | 'year' | 'custom';
@@ -67,17 +68,16 @@ const formatDateRange = (range: DateRange | undefined): string => {
 };
 
 
-export function VisualizationsSection({ loggedEvents, advisors }: VisualizationsSectionProps) { // Removed tasks prop
+// Removed tasks prop from function signature
+export function VisualizationsSection({ loggedEvents, advisors }: VisualizationsSectionProps) {
   const exportLayoutRef = useRef<HTMLDivElement>(null);
   const [timeRange, setTimeRange] = useState<TimeRangePreset>('week');
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>(undefined);
   const [selectedAdvisorId, setSelectedAdvisorId] = useState<string | 'all'>('all');
-  // --- State for Event Type Filter ---
   const [selectedEventType, setSelectedEventType] = useState<string | 'all'>('all');
   const [isExporting, setIsExporting] = useState(false);
   const [renderExportLayout, setRenderExportLayout] = useState(false);
 
-  // --- Map for Advisors ---
   const advisorMap = useMemo(() => {
     return advisors.reduce((map, advisor) => {
       map[advisor.id] = advisor.name;
@@ -85,11 +85,12 @@ export function VisualizationsSection({ loggedEvents, advisors }: Visualizations
     }, {} as Record<string, string>);
   }, [advisors]);
 
-  // --- Get Unique Event Types ---
+  // Removed taskMap
+
   const uniqueEventTypes = useMemo(() => {
     const types = new Set<string>();
     loggedEvents.forEach(event => {
-        if (event.eventType && event.eventType.trim() !== '') {
+        if (event.eventType && typeof event.eventType === 'string' && event.eventType.trim() !== '') {
             types.add(event.eventType.trim());
         }
     });
@@ -128,7 +129,7 @@ export function VisualizationsSection({ loggedEvents, advisors }: Visualizations
        filtered = filtered.filter(event => event.advisorId === selectedAdvisorId);
      }
 
-     // *** Filter by Event Type ***
+     // Filter by Event Type
      if (selectedEventType !== 'all') {
          filtered = filtered.filter(event => event.eventType === selectedEventType);
      }
@@ -138,7 +139,7 @@ export function VisualizationsSection({ loggedEvents, advisors }: Visualizations
   }, [loggedEvents, timeRange, customDateRange, selectedAdvisorId, selectedEventType]);
 
 
-  // Chart data calculations
+  // Chart data calculations (no changes needed here as tasks weren't directly used in charts)
   const advisorTimeData = useMemo(() => {
     if (filteredEvents.length === 0) return { labels: [], datasets: [] };
     const data: Record<string, number> = {};
@@ -189,7 +190,7 @@ export function VisualizationsSection({ loggedEvents, advisors }: Visualizations
   // Added selectedEventType dependency, removed taskMap
   }, [timeRange, customDateRange, selectedAdvisorId, selectedEventType, advisorMap]);
 
-  // --- Update Export Function ---
+  // --- Update Export Function (Filename updated) ---
   const handleExport = async () => {
       if (isExporting) return;
       setIsExporting(true);
@@ -203,7 +204,7 @@ export function VisualizationsSection({ loggedEvents, advisors }: Visualizations
                 link.href = dataUrl;
                 const advisorName = selectedAdvisorId === 'all' ? 'all_advisors' : (advisorMap[selectedAdvisorId] || 'unknown').replace(/\s+/g, '_').toLowerCase();
                 // Include event type in filename
-                const eventTypeFileName = selectedEventType === 'all' ? 'all_events' : selectedEventType.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                const eventTypeFileName = selectedEventType === 'all' ? 'all_events' : (typeof selectedEventType === 'string' ? selectedEventType.replace(/[^a-z0-9]/gi, '_').toLowerCase() : 'unknown_event');
                 const rangeLabel = (timeRange === 'custom' ? formatDateRange(customDateRange) : getTimeRangeLabel(timeRange)).replace(/[^a-z0-9]/gi, '_').toLowerCase();
                 // Updated filename format
                 link.download = `time_viz_${advisorName}_${eventTypeFileName}_${rangeLabel}.png`;
@@ -215,15 +216,15 @@ export function VisualizationsSection({ loggedEvents, advisors }: Visualizations
   };
 
   return (
-    <> 
+    <>
         <Card className="w-full shadow-lg">
             <CardHeader className="flex flex-col space-y-4 pb-4">
-                {/* Filter Row */} 
+                {/* Filter Row */}
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                     <CardTitle className="text-xl font-semibold text-primary whitespace-nowrap">Visualizations</CardTitle>
-                    {/* Filter Controls Group */} 
+                    {/* Filter Controls Group */}
                     <div className="flex flex-wrap items-center gap-2 justify-start md:justify-end">
-                        {/* --- Event Type Filter UI --- */} 
+                        {/* Event Type Filter UI */}
                          <Select onValueChange={setSelectedEventType} value={selectedEventType}>
                             <SelectTrigger className="w-full sm:w-[180px]">
                                 <SelectValue placeholder="Filter by Event Type" />
@@ -235,7 +236,7 @@ export function VisualizationsSection({ loggedEvents, advisors }: Visualizations
                                 ))}
                             </SelectContent>
                         </Select>
-                        {/* Advisor Filter */} 
+                        {/* Advisor Filter */}
                         <Select onValueChange={setSelectedAdvisorId} value={selectedAdvisorId}>
                             <SelectTrigger className="w-full sm:w-[180px]">
                                 <SelectValue placeholder="Filter by Advisor" />
@@ -245,29 +246,29 @@ export function VisualizationsSection({ loggedEvents, advisors }: Visualizations
                                 {advisors.map(advisor => ( <SelectItem key={advisor.id} value={advisor.id}>{advisor.name}</SelectItem> ))}
                             </SelectContent>
                         </Select>
-                        {/* Clear Button */} 
-                        {/* Update clear condition */} 
+                        {/* Clear Button */}
+                        {/* Update clear condition */}
                         {(timeRange !== 'week' || selectedAdvisorId !== 'all' || selectedEventType !== 'all') && (
                             <Button variant="ghost" size="sm" onClick={clearFilters}>Clear</Button>
                         )}
-                        {/* Export Button */} 
+                        {/* Export Button */}
                         <Button variant="outline" size="sm" onClick={handleExport} disabled={isExporting}>
                             {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />} Export PNG
                         </Button>
                     </div>
                 </div>
-                {/* Time Range Buttons */} 
+                {/* Time Range Buttons */}
                 <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-medium mr-2 whitespace-nowrap">Date Range:</span>
                     {timeRangePresets.map((preset) => (<Button key={preset.value} variant={timeRange === preset.value ? 'secondary' : 'outline'} size="sm" onClick={() => setTimeRange(preset.value)} className={cn("h-8", timeRange === 'custom' && preset.value === 'custom' && 'ring-2 ring-primary')} > {preset.label} </Button>))}
                 </div>
-                {/* Custom Date Range Picker */} 
+                {/* Custom Date Range Picker */}
                 {timeRange === 'custom' && (<div className="mt-2"> <DateRangePicker date={customDateRange} onDateChange={setCustomDateRange} /> </div>)}
-                {/* Filter Text Display (Updated) */} 
+                {/* Filter Text Display (Updated) */}
                 <div className="text-xs text-muted-foreground pt-3 mt-3 border-t border-dashed"> {currentFiltersText} </div>
             </CardHeader>
             <CardContent className="space-y-8 pt-4">
-                {/* Charts */} 
+                {/* Charts */}
                  <div>
                     <h3 className="text-lg font-semibold text-center mb-4">Time Logged Per Advisor</h3>
                     {filteredEvents.length > 0 ? <Bar data={advisorTimeData} options={{ responsive: true, maintainAspectRatio: true, animation: { duration: 1000 } }} /> : <p className="text-center text-muted-foreground">No data for selected filters.</p>}
@@ -285,9 +286,9 @@ export function VisualizationsSection({ loggedEvents, advisors }: Visualizations
             </CardContent>
         </Card>
 
-        {/* Conditionally Rendered Hidden Layout for Export */} 
+        {/* Conditionally Rendered Hidden Layout for Export */}
         {renderExportLayout && (
-            <div style={{ position: 'absolute', top: '-9999px', left: '-9999px', zIndex: -10 }}> 
+            <div style={{ position: 'absolute', top: '-9999px', left: '-9999px', zIndex: -10 }}>
                 <ExportVisualizationLayout
                     ref={exportLayoutRef}
                     advisorTimeData={advisorTimeData}
@@ -297,6 +298,6 @@ export function VisualizationsSection({ loggedEvents, advisors }: Visualizations
                 />
             </div>
         )}
-    </> 
+    </>
   );
 }

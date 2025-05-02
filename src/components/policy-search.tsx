@@ -11,7 +11,7 @@ import { Loader2, Search, Upload, FileText, AlertCircle, CalendarClock, Receipt 
 // Define the structure for policy information extracted from the CSV
 type PolicyInfo = {
   policyNumber: string;
-  status: string; // e.g., 'TEMPORARILY_LAPSED', 'PERMANENTLY_LAPSED', 'ON_RISK'
+  status: string; // e.g., 'TEMPORARILY_LAPSED', 'PERMANENTLY_LAPSED', 'ON_RISK', 'CANCELLED'
   missedPayments: string[]; // Store valid, non-empty dates
   cancellationReason?: string; // Optional: Reason for cancellation/lapse
   potentialCancellationDate?: string; // Optional: Calculated cancellation date for specific 'ON_RISK' cases
@@ -241,8 +241,8 @@ export function PolicySearch() {
     if (upperStatus === 'ON_RISK' || upperStatus === 'ON RISK') {
       return 'text-green-600';
     }
-    // Consider both temporary and permanent lapse as red
-    if (isLapsedStatus(status)) {
+    // Consider lapse AND cancelled statuses as red
+    if (isLapsedStatus(status) || upperStatus === 'CANCELLED') { // Added check for 'CANCELLED'
       return 'text-red-600';
     }
     return 'text-muted-foreground'; // Default for other statuses like 'UNKNOWN'
@@ -251,7 +251,13 @@ export function PolicySearch() {
    // Helper to check if a status indicates lapse
   const isLapsedStatus = (status: string): boolean => {
     const upperStatus = status.toUpperCase();
-    return upperStatus === 'LAPSED' || upperStatus === 'TEMPORARILY_LAPSED' || upperStatus === 'PERMANENTLY_LAPSED';
+    // Define all statuses that should be considered 'lapsed' or equivalent (red)
+    return [
+        'LAPSED',
+        'TEMPORARILY_LAPSED',
+        'PERMANENTLY_LAPSED'
+        // Add any other status variations that mean lapsed here
+    ].includes(upperStatus);
   }
 
   return (
@@ -328,8 +334,8 @@ export function PolicySearch() {
                     </p>
                   )}
 
-                  {/* Conditionally display Next Premium Collection Date only if status is not lapsed */}
-                  {!isLapsedStatus(searchResult.status) && searchResult.maxNextPremiumCollectionDate && (
+                  {/* Conditionally display Next Premium Collection Date only if status is not lapsed or cancelled */}
+                  {!(isLapsedStatus(searchResult.status) || searchResult.status.toUpperCase() === 'CANCELLED') && searchResult.maxNextPremiumCollectionDate && (
                      <p className="flex items-center">
                          <CalendarClock className="mr-2 h-4 w-4 text-gray-600"/>
                          <strong>Next Premium Collection:</strong>
@@ -337,8 +343,8 @@ export function PolicySearch() {
                      </p>
                   )}
 
-                  {/* Conditionally display Cancellation Reason for lapsed policies */}
-                  {isLapsedStatus(searchResult.status) && searchResult.cancellationReason && (
+                  {/* Conditionally display Cancellation Reason for lapsed or cancelled policies */}
+                  {(isLapsedStatus(searchResult.status) || searchResult.status.toUpperCase() === 'CANCELLED') && searchResult.cancellationReason && (
                     <p><strong>Reason:</strong> <span className="text-muted-foreground">{searchResult.cancellationReason}</span></p>
                   )}
 

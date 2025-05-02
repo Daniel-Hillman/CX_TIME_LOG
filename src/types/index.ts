@@ -1,3 +1,4 @@
+
 // Defines the standard, predefined event types users can select from.
 export const standardEventTypes = [
   "Meeting",
@@ -23,21 +24,16 @@ export type Advisor = {
   name: string; // Display name of the advisor.
 };
 
-// Defines the structure for tasks, which can be associated with logged events.
-export type Task = {
-  id: string; // Unique identifier for the task.
-  userId: string; // Identifier of the user who owns the task.
-  name: string; // Name or description of the task.
-  dueDate?: string | null; // Optional due date (ISO string format).
-  status: 'pending' | 'in-progress' | 'completed'; // Status of the task.
-};
+// Removed Task type definition
+// export type Task = { ... };
 
 // Represents a single logged event or time entry.
 export type LoggedEvent = {
   id: string; // Unique identifier for the event.
   userId: string; // Identifier of the user who logged the event.
   advisorId: string; // Identifier of the advisor the event is associated with.
-  taskId?: string | null; // Optional identifier of a linked task.
+  // Removed taskId field
+  // taskId?: string | null;
   date: string; // Date of the event (ISO string format: YYYY-MM-DD).
   eventType: StandardEventType | string; // Type of event, either predefined or custom.
   eventDetails?: string | null; // Optional additional details about the event.
@@ -50,5 +46,3 @@ export interface AppSettings {
   theme: 'light' | 'dark' | 'system'; // Current theme preference.
   // Add other settings as needed
 }
-
-

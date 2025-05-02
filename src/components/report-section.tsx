@@ -1,5 +1,7 @@
+
 'use client';
 
+// Removed Task type import
 import type { LoggedEvent, Advisor } from '@/types';
 import * as React from 'react';
 import { useState, useMemo } from 'react';
@@ -16,10 +18,13 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 interface ReportSectionProps {
   loggedEvents: LoggedEvent[];
   advisors: Advisor[];
+  // Removed tasks prop
+  // tasks: Task[];
 }
 
 type GroupingCriteria = 'advisor' | 'date';
 
+// Removed tasks prop from function signature
 export function ReportSection({ loggedEvents, advisors }: ReportSectionProps) {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [selectedAdvisorId, setSelectedAdvisorId] = useState<string | 'all'>('all');
@@ -31,6 +36,8 @@ export function ReportSection({ loggedEvents, advisors }: ReportSectionProps) {
       return map;
     }, {} as Record<string, string>);
   }, [advisors]);
+
+  // Removed taskMap
 
   const filteredEvents = useMemo(() => {
     let filtered = loggedEvents;
