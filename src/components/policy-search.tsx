@@ -242,7 +242,7 @@ export function PolicySearch() {
       return 'text-green-600';
     }
     // Consider both temporary and permanent lapse as red
-    if (upperStatus === 'LAPSED' || upperStatus === 'TEMPORARILY_LAPSED' || upperStatus === 'PERMANENTLY_LAPSED') {
+    if (isLapsedStatus(status)) {
       return 'text-red-600';
     }
     return 'text-muted-foreground'; // Default for other statuses like 'UNKNOWN'
@@ -328,8 +328,8 @@ export function PolicySearch() {
                     </p>
                   )}
 
-                  {/* Display Next Premium Collection Date */}
-                  {searchResult.maxNextPremiumCollectionDate && (
+                  {/* Conditionally display Next Premium Collection Date only if status is not lapsed */}
+                  {!isLapsedStatus(searchResult.status) && searchResult.maxNextPremiumCollectionDate && (
                      <p className="flex items-center">
                          <CalendarClock className="mr-2 h-4 w-4 text-gray-600"/>
                          <strong>Next Premium Collection:</strong>
