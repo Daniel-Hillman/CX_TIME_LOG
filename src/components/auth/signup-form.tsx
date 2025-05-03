@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { FirebaseError } from 'firebase/app'; // Import FirebaseError from firebase/app
+import { FirebaseError } from 'firebase/app';
 import { auth } from '@/lib/firebase';
 
 import { Input } from '@/components/ui/input';
@@ -14,9 +14,22 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 
+// Password validation regex: checks for minimum length, one uppercase, one number
+const passwordValidation = new RegExp(
+  /^(?=.*[A-Z])(?=.*\d).{6,}$/
+);
+
 const formSchema = z.object({
-  email: z.string().email({ message: 'Invalid email address.' }),
-  password: z.string().min(6, { message: 'Password must be at least 6 characters.' }),
+  email: z.string()
+    .email({ message: 'Invalid email address.' })
+    .refine(email => email.endsWith('@clark.io'), {
+      message: 'Sign up requires a @clark.io email address.',
+    }),
+  password: z.string()
+    .min(6, { message: 'Password must be at least 6 characters.' })
+    .regex(passwordValidation, {
+      message: 'Password must contain at least one uppercase letter and one number.',
+    })
 });
 
 export function SignUpForm() {
@@ -30,23 +43,28 @@ export function SignUpForm() {
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    // Domain and password complexity checks are handled by Zod schema validation
     try {
       await createUserWithEmailAndPassword(auth, values.email, values.password);
       toast({
         title: 'Sign Up Successful',
-        description: 'Your account has been created.',
+        description: 'Your account has been created. Please log in.',
       });
       form.reset();
-      // TODO: Maybe automatically log in the user or redirect to login page
     } catch (error) {
       console.error('Sign Up Error:', error);
       let errorMessage = 'An error occurred during sign up.';
-      // Check if error is an instance of FirebaseError or Error
+
       if (error instanceof FirebaseError) {
-        errorMessage = error.message;
-      } else if (error instanceof Error) { // Handle generic Error
-        errorMessage = error.message;
-      } // No need for a generic 'else'
+          // Handle specific Firebase errors like email already in use
+          if (error.code === 'auth/email-already-in-use') {
+              errorMessage = 'This email address is already registered.';
+          } else {
+              errorMessage = error.message; // Use other Firebase error messages
+          }
+      } else if (error instanceof Error) {
+          errorMessage = error.message;
+      }
 
       toast({
         title: 'Sign Up Failed',
@@ -69,9 +87,9 @@ export function SignUpForm() {
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Email</FormLabel>
+                  <FormLabel>Email (@clark.io only)</FormLabel>
                   <FormControl>
-                    <Input type="email" placeholder="m@example.com" {...field} />
+                    <Input type="email" placeholder="advisor@clark.io" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -84,9 +102,9 @@ export function SignUpForm() {
                 <FormItem>
                   <FormLabel>Password</FormLabel>
                   <FormControl>
-                    <Input type="password" placeholder="Password" {...field} />
+                    <Input type="password" placeholder="Min. 6 chars, 1 uppercase, 1 number" {...field} />
                   </FormControl>
-                  <FormMessage />
+                  <FormMessage /> {/* Zod error message will appear here */}
                 </FormItem>
               )}
             />

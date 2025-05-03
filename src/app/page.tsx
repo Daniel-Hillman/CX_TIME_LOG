@@ -1,6 +1,22 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react'; // Keep useState
+import React, { useState, useEffect, useCallback } from 'react';
+import { onAuthStateChanged, signOut, User } from 'firebase/auth';
+import { auth, db } from '@/lib/firebase'; // Import db for Firestore
+import {
+  collection, // Function to get a collection reference
+  query, // Function to create a query
+  // where, // We are fetching all data, so where clause isn't needed *yet*
+  addDoc, // Function to add a new document
+  updateDoc, // Function to update an existing document
+  deleteDoc, // Function to delete a document
+  doc, // Function to get a document reference
+  onSnapshot, // Function for real-time updates
+  Timestamp, // Firestore Timestamp type
+  writeBatch // Function for atomic batch writes
+} from "firebase/firestore";
+
+// UI Components
 import {
   Tabs,
   TabsContent,
@@ -8,249 +24,464 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { ThemeProvider } from "@/components/theme-provider";
-import { ThemeToggle } from "@/components/theme-toggle"; // Fixed import name
+import { ThemeToggle } from "@/components/theme-toggle";
 import { AdvisorManager } from '@/components/advisor-manager';
 import { EventList } from '@/components/event-list';
 import { TimeLogForm } from '@/components/time-log-form';
 import { TimeLogSummary } from '@/components/time-log-summary';
-import { ExportVisualizationLayout } from '@/components/export-visualization-layout';
+// import { ExportVisualizationLayout } from '@/components/export-visualization-layout'; // Not currently used
 import { ReportSection } from '@/components/report-section';
 import { VisualizationsSection } from '@/components/visualizations-section';
-import { PolicySearch } from '@/components/policy-search'; // Import PolicySearch
-import { Calendar, Clock, Users, BookOpen, AreaChart, FileSearch } from 'lucide-react'; // Removed ListTodo
-import { Advisor, LoggedEvent } from '@/types'; // Removed Task type
-import useLocalStorage from '@/hooks/use-local-storage'; // Changed to default import
+import { PolicySearch } from '@/components/policy-search';
+import { LoginForm } from '@/components/auth/login-form';
+import { SignUpForm } from '@/components/auth/signup-form';
+import { Button } from '@/components/ui/button';
 import { useToast } from "@/hooks/use-toast";
+import { Calendar, Clock, Users, AreaChart, FileSearch, LogOut, Loader2 } from 'lucide-react'; // Added Loader2
 
-import { PolicyDataMap } from '@/components/policy-search'; // Import necessary type
+// Types
+import { Advisor, LoggedEvent } from '@/types';
+import { PolicyDataMap } from '@/components/policy-search';
 
-// Removed TempoLogo import
-// import { TempoLogo } from '@/components/tempo-logo';
+// --- Constants for Firestore Collection Names ---
+const ADVISORS_COLLECTION = 'advisors';
+const EVENTS_COLLECTION = 'loggedEvents';
 
 export default function Home() {
   const { toast } = useToast();
-  const [loggedEvents, setLoggedEvents] = useLocalStorage<LoggedEvent[]>('timeLogEvents', []);
-  const [advisors, setAdvisors] = useLocalStorage<Advisor[]>('advisors', []);
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const [showLogin, setShowLogin] = useState(true); // Toggle between Login and Sign Up
+
+  // State for data (fetched from Firestore)
+  const [loggedEvents, setLoggedEvents] = useState<LoggedEvent[]>([]);
+  const [advisors, setAdvisors] = useState<Advisor[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState(true); // Separate loading state for data
+
   const [activeTab, setActiveTab] = useState('time-log');
 
-  // Lifted state for PolicySearch persistence
+  // Policy Search State (remains client-side)
   const [policyData, setPolicyData] = useState<PolicyDataMap>(new Map());
   const [policyFileName, setPolicyFileName] = useState<string | null>(null);
   const [isPolicyLoading, setIsPolicyLoading] = useState<boolean>(false);
   const [policyParseError, setPolicyParseError] = useState<string | null>(null);
 
+  // --- Authentication Effect ---
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setIsLoadingAuth(false);
+      if (!currentUser) {
+          // If user logs out, immediately set data loading to false and clear data
+          setIsLoadingData(false);
+          setAdvisors([]);
+          setLoggedEvents([]);
+      }
+      // Don't reset isLoadingData to true here, let the data fetching effect handle it
+    });
+    return () => unsubscribe(); // Cleanup on unmount
+  }, []);
 
-  // Function to add a new time log event
-  const addTimeLog = useCallback((event: Omit<LoggedEvent, 'id' | 'timestamp'>) => {
-    const newEvent: LoggedEvent = {
-      ...event,
-      id: Date.now().toString(), // Simple unique ID
-      timestamp: new Date().toISOString(),
-    };
-    setLoggedEvents(prevEvents => [...prevEvents, newEvent]);
-    toast({ title: "Success", description: "Time log entry added." });
-  }, [setLoggedEvents, toast]);
-
-  // Add a new advisor
-  const addAdvisor = (name: string) => {
-    if (name && !advisors.find(a => a.name === name)) {
-      const newAdvisor: Advisor = { id: Date.now().toString(), name };
-      setAdvisors(prev => [...prev, newAdvisor]);
-      toast({ title: "Success", description: `Advisor '${name}' added.` });
-    } else if (advisors.find(a => a.name === name)) {
-      toast({ variant: "destructive", title: "Error", description: `Advisor '${name}' already exists.` });
-    } else {
-      toast({ variant: "destructive", title: "Error", description: "Advisor name cannot be empty." });
+  // --- Firestore Data Fetching Effect ---
+  useEffect(() => {
+    // Only run if a user is logged in
+    if (!user) {
+      setIsLoadingData(false); // Ensure loading is false if no user
+      return;
     }
-  };
 
-  // Remove an advisor
-  const removeAdvisor = (id: string) => {
-    const advisorToRemove = advisors.find(a => a.id === id);
-    // Prevent deletion if advisor is associated with logged events
-    if (loggedEvents.some(event => event.advisorId === id)) {
-      toast({
-        variant: "destructive",
-        title: "Deletion Failed",
-        description: `Cannot delete advisor '${advisorToRemove?.name}' as they have logged time entries.`,
+    console.log("User logged in, fetching Firestore data...");
+    setIsLoadingData(true); // Start loading data
+
+    // Fetch Advisors
+    const advisorsQuery = query(collection(db, ADVISORS_COLLECTION));
+    const unsubscribeAdvisors = onSnapshot(advisorsQuery, (querySnapshot) => {
+      const advisorsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Advisor));
+      setAdvisors(advisorsData);
+      // Don't set loading false until both subscriptions are active and initial data is potentially received
+      console.log("Advisors fetched: ", advisorsData.length);
+    }, (error) => {
+        console.error("Error fetching advisors: ", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not fetch advisors." });
+        setIsLoadingData(false); // Set loading false on error
+    });
+
+    // Fetch Logged Events
+    const eventsQuery = query(collection(db, EVENTS_COLLECTION));
+    const unsubscribeEvents = onSnapshot(eventsQuery, (querySnapshot) => {
+      const eventsData = querySnapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+              id: doc.id,
+              ...data,
+              // Convert Firestore Timestamp to ISO String for components
+              timestamp: (data.timestamp as Timestamp)?.toDate().toISOString() ?? new Date().toISOString(),
+              // Convert Firestore date string (YYYY-MM-DD) if needed, assume it's stored correctly
+              date: data.date, 
+          } as LoggedEvent;
       });
-      return; // Stop the deletion process
+      setLoggedEvents(eventsData);
+      setIsLoadingData(false); // Data is ready after events arrive
+      console.log("Events fetched: ", eventsData.length);
+    }, (error) => {
+        console.error("Error fetching logged events: ", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not fetch time logs." });
+        setIsLoadingData(false); // Set loading false on error
+    });
+
+    // Cleanup Firestore subscriptions
+    return () => {
+      console.log("Cleaning up Firestore listeners.");
+      unsubscribeAdvisors();
+      unsubscribeEvents();
+    };
+  }, [user, toast]); // Re-run when user changes
+
+
+  // --- Firestore Data Modification Functions (Including userId) ---
+
+  const addTimeLog = useCallback(async (eventData: Omit<LoggedEvent, 'id' | 'timestamp' | 'userId'>) => {
+    if (!user) {
+        toast({ variant: "destructive", title: "Error", description: "You must be logged in to add logs." });
+        return;
+    }
+    try {
+      const newEvent = {
+        ...eventData,
+        userId: user.uid, // Add the current user's ID
+        timestamp: Timestamp.fromDate(new Date()), // Use Firestore Timestamp
+      };
+      const docRef = await addDoc(collection(db, EVENTS_COLLECTION), newEvent);
+      console.log("Time log added with ID: ", docRef.id);
+      toast({ title: "Success", description: "Time log entry added." });
+    } catch (error) {
+      console.error("Error adding time log: ", error);
+      toast({ variant: "destructive", title: "Error", description: "Failed to add time log entry." });
+    }
+  }, [user, toast]);
+
+  const addAdvisor = useCallback(async (name: string) => {
+    if (!user) {
+        toast({ variant: "destructive", title: "Error", description: "You must be logged in to manage advisors." });
+        return;
+    }
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+        toast({ variant: "destructive", title: "Error", description: "Advisor name cannot be empty." });
+        return;
+    }
+    if (advisors.some(a => a.name.toLowerCase() === trimmedName.toLowerCase())) {
+      toast({ variant: "destructive", title: "Error", description: `Advisor '${trimmedName}' already exists.` });
+      return;
+    }
+    try {
+        const newAdvisor = {
+            name: trimmedName,
+            userId: user.uid // Add the current user's ID
+        };
+        const docRef = await addDoc(collection(db, ADVISORS_COLLECTION), newAdvisor);
+        console.log("Advisor added with ID: ", docRef.id);
+        toast({ title: "Success", description: `Advisor '${trimmedName}' added.` });
+    } catch (error) {
+        console.error("Error adding advisor: ", error);
+        toast({ variant: "destructive", title: "Error", description: "Failed to add advisor." });
+    }
+  }, [advisors, user, toast]);
+
+  // --- Other Firestore Functions (removeAdvisor, editAdvisor, etc.) ---
+  // (Keep existing logic, ensuring user check is present)
+
+    const removeAdvisor = useCallback(async (id: string) => {
+    if (!user) {
+      toast({ variant: "destructive", title: "Error", description: "You must be logged in to manage advisors." });
+      return;
+    }
+    const advisorToRemove = advisors.find(a => a.id === id);
+    if (!advisorToRemove) {
+      toast({ variant: "warning", title: "Not Found", description: `Advisor not found.` });
+      return;
     }
 
-    setAdvisors(prev => prev.filter(a => a.id !== id));
-    if (advisorToRemove) {
-       toast({ title: "Success", description: `Advisor '${advisorToRemove.name}' removed.` });
-    } else {
-         toast({ variant: "warning", title: "Not Found", description: `Advisor not found.` });
-    }
-  };
-
-  // Edit an advisor's name
-  const editAdvisor = (id: string, newName: string) => {
-    if (!newName.trim()) {
-       toast({ variant: "destructive", title: "Error", description: "Advisor name cannot be empty." });
-       return;
-    }
-     // Check if the new name already exists (case-insensitive)
-    if (advisors.some(a => a.id !== id && a.name.toLowerCase() === newName.trim().toLowerCase())) {
-        toast({ variant: "destructive", title: "Error", description: `Advisor name '${newName.trim()}' already exists.` });
+    if (loggedEvents.some(event => event.advisorId === id)) {
+        toast({
+            variant: "destructive",
+            title: "Deletion Failed",
+            description: `Cannot delete advisor '${advisorToRemove.name}' as they have logged time entries. Please reassign or delete the logs first.`,
+            duration: 5000,
+        });
         return;
     }
 
-    let advisorName = '';
-    setAdvisors(prev => prev.map(a => {
-      if (a.id === id) {
-        advisorName = a.name; // Store original name for toast message
-        return { ...a, name: newName.trim() };
-      }
-      return a;
-    }));
-     toast({ title: "Success", description: `Advisor '${advisorName}' renamed to '${newName.trim()}'.` });
+    try {
+        await deleteDoc(doc(db, ADVISORS_COLLECTION, id));
+        toast({ title: "Success", description: `Advisor '${advisorToRemove.name}' removed.` });
+    } catch (error) {
+        console.error("Error removing advisor: ", error);
+        toast({ variant: "destructive", title: "Error", description: "Failed to remove advisor." });
+    }
+}, [advisors, loggedEvents, user, toast]);
+
+
+  const editAdvisor = useCallback(async (id: string, newName: string) => {
+    if (!user) {
+      toast({ variant: "destructive", title: "Error", description: "You must be logged in to manage advisors." });
+      return;
+    }
+    const trimmedNewName = newName.trim();
+    if (!trimmedNewName) {
+      toast({ variant: "destructive", title: "Error", description: "Advisor name cannot be empty." });
+      return;
+    }
+    const originalAdvisor = advisors.find(a => a.id === id);
+    if (!originalAdvisor) {
+         toast({ variant: "warning", title: "Not Found", description: `Advisor not found.` });
+         return;
+    }
+
+    if (advisors.some(a => a.id !== id && a.name.toLowerCase() === trimmedNewName.toLowerCase())) {
+      toast({ variant: "destructive", title: "Error", description: `Advisor name '${trimmedNewName}' already exists.` });
+      return;
+    }
+
+    try {
+        const advisorRef = doc(db, ADVISORS_COLLECTION, id);
+        // Only update the name, leave userId untouched
+        await updateDoc(advisorRef, { name: trimmedNewName });
+        toast({ title: "Success", description: `Advisor '${originalAdvisor.name}' renamed to '${trimmedNewName}'.` });
+    } catch (error) {
+        console.error("Error editing advisor: ", error);
+        toast({ variant: "destructive", title: "Error", description: "Failed to rename advisor." });
+    }
+}, [advisors, user, toast]);
+
+  const clearAllLogs = useCallback(async () => {
+    if (!user) {
+      toast({ variant: "destructive", title: "Error", description: "You must be logged in." });
+      return;
+    }
+    if (loggedEvents.length === 0) {
+        toast({ variant: "default", title: "Info", description: "There are no time logs to clear." });
+        return;
+    }
+    // TODO: Implement confirmation dialog before proceeding
+    console.warn(`User ${user.email} initiated Clear All Logs. Deleting ${loggedEvents.length} entries...`);
+    try {
+        const batch = writeBatch(db);
+        loggedEvents.forEach(event => {
+            const eventRef = doc(db, EVENTS_COLLECTION, event.id);
+            batch.delete(eventRef);
+        });
+        await batch.commit();
+        console.log("Batch delete successful.");
+        toast({ title: "Success", description: "All time log entries cleared." });
+    } catch (error) {
+        console.error("Error clearing all logs: ", error);
+        toast({ variant: "destructive", title: "Error", description: "Failed to clear all time logs." });
+    }
+  }, [loggedEvents, user, toast]);
+
+
+  const deleteLogEntry = useCallback(async (id: string) => {
+    if (!user) {
+        toast({ variant: "destructive", title: "Error", description: "You must be logged in." });
+        return;
+    }
+    try {
+        await deleteDoc(doc(db, EVENTS_COLLECTION, id));
+        toast({ title: "Success", description: "Log entry deleted." });
+    } catch (error) {
+        console.error("Error deleting log entry: ", error);
+        toast({ variant: "destructive", title: "Error", description: "Failed to delete log entry." });
+    }
+  }, [user, toast]);
+
+  const editLogEntry = useCallback(async (updatedEvent: LoggedEvent) => {
+    if (!user) {
+        toast({ variant: "destructive", title: "Error", description: "You must be logged in." });
+        return;
+    }
+    try {
+        const eventRef = doc(db, EVENTS_COLLECTION, updatedEvent.id);
+        // Prepare data, ensure userId isn't accidentally overwritten if included in updatedEvent
+        const dataToUpdate: Partial<Omit<LoggedEvent, 'id'>> = { // Use Partial to only update fields present
+            advisorId: updatedEvent.advisorId,
+            date: updatedEvent.date,
+            eventType: updatedEvent.eventType,
+            eventDetails: updatedEvent.eventDetails,
+            loggedTime: updatedEvent.loggedTime,
+            // Convert timestamp back to Firestore Timestamp
+            timestamp: Timestamp.fromDate(new Date(updatedEvent.timestamp)),
+            // userId should generally not be changed, but could be added if needed
+            // userId: updatedEvent.userId 
+        };
+
+        // Remove undefined fields to avoid overwriting with undefined in Firestore
+        Object.keys(dataToUpdate).forEach(key => dataToUpdate[key as keyof typeof dataToUpdate] === undefined && delete dataToUpdate[key as keyof typeof dataToUpdate]);
+
+        await updateDoc(eventRef, dataToUpdate);
+        toast({ title: "Success", description: "Log entry updated." });
+    } catch (error) {
+        console.error("Error editing log entry: ", error);
+        toast({ variant: "destructive", title: "Error", description: "Failed to update log entry." });
+    }
+  }, [user, toast]);
+
+
+  // --- Logout Handler ---
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      toast({ title: "Logged Out", description: "You have been successfully logged out." });
+      // No need to clear state here, useEffect[user] handles it.
+    } catch (error) {
+      console.error("Logout Error:", error);
+      toast({ variant: "destructive", title: "Logout Failed", description: "An error occurred during logout." });
+    }
   };
 
-   // Clear all logged events
-   const clearAllLogs = () => {
-       if (loggedEvents.length === 0) {
-           toast({ variant: "default", title: "Info", description: "There are no time logs to clear." });
-           return;
-       }
-       // Add confirmation dialog here if desired
-       setLoggedEvents([]);
-       toast({ title: "Success", description: "All time log entries cleared." });
-   };
+  // --- Render Logic ---
 
-   // Delete a specific time log event
-   const deleteLogEntry = (id: string) => {
-       const entryExists = loggedEvents.some(event => event.id === id);
-       if (!entryExists) {
-           toast({ variant: "destructive", title: "Error", description: "Log entry not found." });
-           return;
-       }
-       setLoggedEvents(prevEvents => prevEvents.filter(event => event.id !== id)); // Corrected logic
-       toast({ title: "Success", description: "Log entry deleted." });
-   };
+  // Initial Auth Loading Screen
+  if (isLoadingAuth) {
+    return (
+        <div className="flex justify-center items-center min-h-screen">
+            <Loader2 className="h-8 w-8 animate-spin mr-2" />
+            Loading Authentication...
+        </div>
+    );
+  }
 
+  // Logged Out View: Show Login/Sign Up forms
+  if (!user) {
+    return (
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+             <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-4">
+                 <header className="flex justify-center items-center relative mb-8 pb-4 border-b w-full max-w-4xl">
+                    <h1 className="text-4xl md:text-5xl font-minecraft font-bold text-primary tracking-tight">Tempo</h1>
+                    <div className="absolute right-0 top-1/2 transform -translate-y-1/2">
+                        <ThemeToggle />
+                    </div>
+                </header>
+                <div className="flex flex-col items-center space-y-4 w-full">
+                    {showLogin ? <LoginForm /> : <SignUpForm />}
+                    <Button variant="link" onClick={() => setShowLogin(!showLogin)}>
+                    {showLogin ? "Need an account? Sign Up (@clark.io only)" : "Already have an account? Login"}
+                    </Button>
+                </div>
+             </div>
+        </ThemeProvider>
+    );
+  }
 
-   // Edit a specific time log event
-   const editLogEntry = (updatedEvent: LoggedEvent) => {
-       const index = loggedEvents.findIndex(event => event.id === updatedEvent.id);
-       if (index === -1) {
-           toast({ variant: "destructive", title: "Error", description: "Log entry not found for editing." });
-           return;
-       }
-       setLoggedEvents(prevEvents => {
-           const newEvents = [...prevEvents];
-           newEvents[index] = updatedEvent;
-           return newEvents;
-       });
-       toast({ title: "Success", description: "Log entry updated." });
-   };
-
-
-  // Handle active tab state for potential styling or conditional rendering
-  const handleTabChange = (value: string) => {
-    setActiveTab(value);
-  };
-
+  // Logged In View: Show main application
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
      <div className="min-h-screen bg-background text-foreground">
        <div className="container mx-auto p-4 md:p-8">
 
-         {/* Header Section with Centered Title and Right-aligned Theme Toggle */}
          <header className="flex justify-center items-center relative mb-8 pb-4 border-b">
-            {/* Text-based Title - Centered */}
-            <h1 className="text-5xl font-minecraft font-bold text-primary tracking-tight">
-                Tempo
-            </h1>
-           {/* Theme Toggle: Positioned absolutely to the right */}
-           <div className="absolute right-0 top-1/2 transform -translate-y-1/2">
-             <ThemeToggle />
-           </div>
+            <h1 className="text-5xl font-minecraft font-bold text-primary tracking-tight">Tempo</h1>
+            <div className="absolute right-0 top-1/2 transform -translate-y-1/2 flex items-center space-x-2">
+                {/* Display user email if available */} 
+                {user.email && <span className="text-sm text-muted-foreground hidden md:inline">{user.email}</span>}
+                <ThemeToggle />
+                <Button variant="outline" size="icon" onClick={handleLogout} title="Logout">
+                    <LogOut className="h-5 w-5" />
+                </Button>
+            </div>
          </header>
 
-         {/* Main Content Area with Tabs */}
-         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-           <TabsList className="flex flex-wrap h-auto justify-center gap-2 mb-8 p-1">
-             <TabsTrigger value="time-log" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
-               <Clock className="mr-2 h-4 w-4" /> Time Log
-             </TabsTrigger>
-             <TabsTrigger value="summary" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
-               <Calendar className="mr-2 h-4 w-4" /> Summary
-             </TabsTrigger>
-              <TabsTrigger value="reports" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
-                 <AreaChart className="mr-2 h-4 w-4" /> Reports
-              </TabsTrigger>
-             <TabsTrigger value="visualizations" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
-                <AreaChart className="mr-2 h-4 w-4" /> Visualizations
-             </TabsTrigger>
-             <TabsTrigger value="policy-search" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
-                <FileSearch className="mr-2 h-4 w-4" /> Policy Search
-             </TabsTrigger>
-             <TabsTrigger value="manage-advisors" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
-               <Users className="mr-2 h-4 w-4" /> Manage Advisors
-             </TabsTrigger>
-           </TabsList>
+         {/* Data Loading Indicator */} 
+         {isLoadingData ? (
+             <div className="flex justify-center items-center py-10">
+                <Loader2 className="h-6 w-6 animate-spin mr-3" />
+                Loading Data...
+            </div>
+         ) : (
+             /* Main App Content */
+             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                 <TabsList className="flex flex-wrap h-auto justify-center gap-2 mb-8 p-1">
+                     {/* Tab Triggers */} 
+                     <TabsTrigger value="time-log" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
+                     <Clock className="mr-2 h-4 w-4" /> Time Log
+                     </TabsTrigger>
+                     <TabsTrigger value="summary" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
+                     <Calendar className="mr-2 h-4 w-4" /> Summary
+                     </TabsTrigger>
+                     <TabsTrigger value="reports" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
+                         <AreaChart className="mr-2 h-4 w-4" /> Reports
+                     </TabsTrigger>
+                     <TabsTrigger value="visualizations" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
+                         <AreaChart className="mr-2 h-4 w-4" /> Visualizations
+                     </TabsTrigger>
+                     <TabsTrigger value="policy-search" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
+                         <FileSearch className="mr-2 h-4 w-4" /> Policy Search
+                     </TabsTrigger>
+                     <TabsTrigger value="manage-advisors" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
+                     <Users className="mr-2 h-4 w-4" /> Manage Advisors
+                     </TabsTrigger>
+                 </TabsList>
 
-           {/* Tab Content Sections */}
-           <TabsContent value="time-log">
-             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-               <div className="lg:col-span-1">
-                 <TimeLogForm
-                     advisors={advisors}
-                     onLogEvent={addTimeLog}
-                     onUpdateEvent={async (id, data) => editLogEntry({...data, id })}
-                     onCancelEdit={() => {/* Add logic to reset edit state if needed */}}
-                     eventToEdit={null}
-                     isSubmitting={false}
-                 />
-               </div>
-               <div className="lg:col-span-2">
-                 <EventList
-                    events={loggedEvents}
-                    advisors={advisors}
-                    onDeleteEvent={async (id) => deleteLogEntry(id)}
-                    onEditEvent={(event) => { /* Add logic to set the eventToEdit state */ }}
-                    deletingId={null}
-                   />
-               </div>
-             </div>
-           </TabsContent>
+                 {/* Tab Content */} 
+                 <TabsContent value="time-log">
+                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                         <div className="lg:col-span-1">
+                             <TimeLogForm
+                                 advisors={advisors}
+                                 onLogEvent={addTimeLog}
+                                 onUpdateEvent={editLogEntry}
+                                 onCancelEdit={() => { /* TODO */ }}
+                                 eventToEdit={null} /* TODO */
+                                 isSubmitting={false} /* TODO */
+                             />
+                         </div>
+                         <div className="lg:col-span-2">
+                             <EventList
+                                 events={loggedEvents}
+                                 advisors={advisors}
+                                 onDeleteEvent={deleteLogEntry}
+                                 onEditEvent={(event) => { /* TODO */ }}
+                                 deletingId={null} /* TODO */
+                             />
+                         </div>
+                     </div>
+                 </TabsContent>
 
-           <TabsContent value="summary">
-              <TimeLogSummary loggedEvents={loggedEvents} advisors={advisors} />
-           </TabsContent>
+                 <TabsContent value="summary">
+                     <TimeLogSummary loggedEvents={loggedEvents} advisors={advisors} />
+                 </TabsContent>
 
-           <TabsContent value="reports">
-               <ReportSection
-                  loggedEvents={loggedEvents}
-                  advisors={advisors}
-                />
-           </TabsContent>
+                 <TabsContent value="reports">
+                     <ReportSection loggedEvents={loggedEvents} advisors={advisors} />
+                 </TabsContent>
 
-           <TabsContent value="visualizations">
-               <VisualizationsSection
-                   loggedEvents={loggedEvents}
-                   advisors={advisors}
-               />
-            </TabsContent>
+                 <TabsContent value="visualizations">
+                     <VisualizationsSection loggedEvents={loggedEvents} advisors={advisors} />
+                 </TabsContent>
 
-           <TabsContent value="policy-search">
-               <PolicySearch
-                  policyData={policyData}
-                  setPolicyData={setPolicyData}
-                  fileName={policyFileName}
-                  setFileName={setPolicyFileName}
-                  isLoading={isPolicyLoading}
-                  setIsLoading={setIsPolicyLoading}
-                  parseError={policyParseError}
-                  setParseError={setPolicyParseError} />
-           </TabsContent>
+                 <TabsContent value="policy-search">
+                     <PolicySearch
+                         policyData={policyData}
+                         setPolicyData={setPolicyData}
+                         fileName={policyFileName}
+                         setFileName={setPolicyFileName}
+                         isLoading={isPolicyLoading}
+                         setIsLoading={setIsPolicyLoading}
+                         parseError={policyParseError}
+                         setParseError={setPolicyParseError}
+                     />
+                 </TabsContent>
 
-           <TabsContent value="manage-advisors">
-              <AdvisorManager advisors={advisors} onAddAdvisor={addAdvisor} onRemoveAdvisor={removeAdvisor} onEditAdvisor={editAdvisor} />
-           </TabsContent>
-         </Tabs>
+                 <TabsContent value="manage-advisors">
+                     <AdvisorManager
+                         advisors={advisors}
+                         onAddAdvisor={addAdvisor}
+                         onRemoveAdvisor={removeAdvisor}
+                         onEditAdvisor={editAdvisor}
+                     />
+                 </TabsContent>
+             </Tabs>
+         )}
        </div>
      </div>
     </ThemeProvider>
