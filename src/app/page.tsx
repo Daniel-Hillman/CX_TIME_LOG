@@ -1,381 +1,262 @@
-
 'use client';
 
-import * as React from 'react';
-import { useState, useEffect, useRef, useCallback } from 'react';
-// Removed Task type import
-import type { Advisor, LoggedEvent } from '@/types';
+import React, { useState, useEffect, useCallback } from 'react'; // Keep useState
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import { ThemeProvider } from "@/components/theme-provider";
+import { ThemeToggle } from "@/components/theme-toggle"; // Fixed import name
 import { AdvisorManager } from '@/components/advisor-manager';
-// Removed TaskManager import
-import { TimeLogForm } from '@/components/time-log-form';
 import { EventList } from '@/components/event-list';
-import { PolicySearch } from '@/components/policy-search'; // Import PolicySearch
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-// Removed ListTodo icon
-import { Users, ListChecks, Clock, LogOut, BarChart2, AreaChart, Activity, FileSearch } from 'lucide-react'; // Import FileSearch icon
-import { Button } from '@/components/ui/button';
-import { useToast } from "@/hooks/use-toast";
-import { ThemeToggle } from "@/components/theme-toggle";
-
-import { auth, db } from '@/lib/firebase';
-import { onAuthStateChanged, User, signOut } from 'firebase/auth';
-import { collection, query, where, getDocs, addDoc, deleteDoc, doc, runTransaction, updateDoc } from 'firebase/firestore';
-
-import { LoginForm } from '@/components/auth/login-form';
-import { SignUpForm } from '@/components/auth/signup-form';
+import { TimeLogForm } from '@/components/time-log-form';
+import { TimeLogSummary } from '@/components/time-log-summary';
+import { ExportVisualizationLayout } from '@/components/export-visualization-layout';
 import { ReportSection } from '@/components/report-section';
 import { VisualizationsSection } from '@/components/visualizations-section';
+import { PolicySearch } from '@/components/policy-search'; // Import PolicySearch
+import { Calendar, Clock, Users, BookOpen, AreaChart, FileSearch } from 'lucide-react'; // Removed ListTodo
+import { Advisor, LoggedEvent } from '@/types'; // Removed Task type
+import useLocalStorage from '@/hooks/use-local-storage'; // Changed to default import
+import { useToast } from "@/hooks/use-toast";
+
+import { PolicyDataMap } from '@/components/policy-search'; // Import necessary type
 
 export default function Home() {
-  // State for Advisors and Events
-  const [advisors, setAdvisors] = useState<Advisor[]>([]);
-  const [loggedEvents, setLoggedEvents] = useState<LoggedEvent[]>([]);
-  // Removed State for Tasks
-  // const [tasks, setTasks] = useState<Task[]>([]);
-
-  // Auth and Loading State
-  const [isClient, setIsClient] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
-  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
-  const [isLoading, setIsLoading] = useState(true);
-
-  // State for UI interaction statuses
-  const [isProcessingEvent, setIsProcessingEvent] = useState(false);
-  const [isAddingAdvisor, setIsAddingAdvisor] = useState(false);
-  const [removingAdvisorId, setRemovingAdvisorId] = useState<string | null>(null);
-  const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
-  // Removed Task interaction statuses
-  // const [isAddingTask, setIsAddingTask] = useState(false);
-  // const [removingTaskId, setRemovingTaskId] = useState<string | null>(null);
-
   const { toast } = useToast();
+  const [loggedEvents, setLoggedEvents] = useLocalStorage<LoggedEvent[]>('timeLogEvents', []);
+  // Removed tasks state
+  // const [tasks, setTasks] = useLocalStorage<Task[]>('tasks', []);
+  const [advisors, setAdvisors] = useLocalStorage<Advisor[]>('advisors', []);
+  const [activeTab, setActiveTab] = useState('time-log');
 
-  // State for editing events and managing tabs
-  const [eventToEdit, setEventToEdit] = useState<LoggedEvent | null>(null);
-  const [activeTab, setActiveTab] = useState('log-time');
-  const timeLogFormRef = useRef<HTMLDivElement>(null);
-
-  // Updated fetchUserData to remove Tasks
-  const fetchUserData = useCallback(async (userId: string) => {
-    setIsLoading(true);
-    try {
-      // Fetch Advisors
-      const advisorsQuery = query(collection(db, 'advisors'), where('userId', '==', userId));
-      const advisorSnapshot = await getDocs(advisorsQuery);
-      const fetchedAdvisors = advisorSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Advisor));
-      setAdvisors(fetchedAdvisors);
-
-      // Removed Fetch Tasks
-      // const tasksQuery = query(collection(db, 'tasks'), where('userId', '==', userId));
-      // const taskSnapshot = await getDocs(tasksQuery);
-      // const fetchedTasks = taskSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task));
-      // setTasks(fetchedTasks);
-
-      // Fetch Logged Events
-      const eventsQuery = query(collection(db, 'loggedEvents'), where('userId', '==', userId));
-      const eventSnapshot = await getDocs(eventsQuery);
-      const fetchedEvents = eventSnapshot.docs
-          .map(doc => ({ id: doc.id, ...doc.data() } as LoggedEvent))
-          .sort((a, b) => b.date.localeCompare(a.date));
-      setLoggedEvents(fetchedEvents);
-
-    } catch (error) {
-      console.error('Error fetching user data:', error);
-      toast({ title: "Error Fetching Data", description: "Could not load user data.", variant: "destructive" });
-       // Reset state on error to avoid partial data display
-       setAdvisors([]);
-       // Removed reset tasks
-       // setTasks([]);
-       setLoggedEvents([]);
-    } finally {
-        setIsLoading(false);
-    }
-  }, [toast]);
-
-  useEffect(() => {
-    setIsClient(true);
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
-        await fetchUserData(currentUser.uid);
-      } else {
-        // Reset all user-specific state on logout
-        setAdvisors([]);
-        // Removed reset tasks
-        // setTasks([]);
-        setLoggedEvents([]);
-        setIsLoading(false);
-        setEventToEdit(null);
-        setActiveTab('log-time'); // Reset to default tab on logout
-      }
-    });
-    return () => unsubscribe();
-  }, [fetchUserData]);
-
-  // --- Advisor Handlers ---
-  const handleAddAdvisor = async (name: string) => {
-    if (!user || isAddingAdvisor) return;
-    setIsAddingAdvisor(true);
-    try {
-      await addDoc(collection(db, 'advisors'), { name, userId: user.uid });
-      await fetchUserData(user.uid);
-    } catch (error) {
-      console.error('Error adding advisor:', error);
-      toast({ title: "Error", description: "Failed to add advisor.", variant: "destructive" });
-    } finally {
-      setIsAddingAdvisor(false);
-    }
-  };
-
-  const handleRemoveAdvisor = async (advisorIdToRemove: string) => {
-      if (!user || removingAdvisorId) return;
-      setRemovingAdvisorId(advisorIdToRemove);
-      try {
-          await runTransaction(db, async (transaction) => {
-              const advisorRef = doc(db, 'advisors', advisorIdToRemove);
-              transaction.delete(advisorRef);
-          });
-          setAdvisors(prev => prev.filter(a => a.id !== advisorIdToRemove));
-          toast({ title: "Success", description: "Advisor removed." });
-      } catch (error) {
-          console.error('Error removing advisor:', error);
-          toast({ title: "Error", description: "Failed to remove advisor.", variant: "destructive" });
-      } finally {
-          setRemovingAdvisorId(null);
-      }
-  };
-
-  // *** Removed Task Handlers ***
-  // const handleAddTask = async (name: string) => { ... };
-  // const handleRemoveTask = async (taskIdToRemove: string) => { ... };
+  // Lifted state for PolicySearch persistence
+  const [policyData, setPolicyData] = useState<PolicyDataMap>(new Map());
+  const [policyFileName, setPolicyFileName] = useState<string | null>(null);
+  const [isPolicyLoading, setIsPolicyLoading] = useState<boolean>(false);
+  const [policyParseError, setPolicyParseError] = useState<string | null>(null);
 
 
-  // --- Event Handlers (Create, Update, Delete, Edit) ---
-  const handleLogEvent = async (newEvent: Omit<LoggedEvent, 'userId' | 'id'>): Promise<void> => {
-    if (!user || isProcessingEvent) return Promise.reject("Already processing or not logged in");
-    setIsProcessingEvent(true);
-    try {
-      const eventToAdd = { ...newEvent, userId: user.uid };
-      await addDoc(collection(db, 'loggedEvents'), eventToAdd);
-      await fetchUserData(user.uid);
-    } catch (error) {
-      console.error('Error adding log event:', error);
-      throw error;
-    } finally {
-      setIsProcessingEvent(false);
-    }
-  };
-
-  const handleUpdateEvent = async (eventId: string, eventData: Omit<LoggedEvent, 'userId' | 'id'>): Promise<void> => {
-      if (!user || isProcessingEvent) return Promise.reject("Already processing or not logged in");
-      setIsProcessingEvent(true);
-      try {
-          const eventRef = doc(db, 'loggedEvents', eventId);
-          const dataToUpdate = { ...eventData, userId: user.uid };
-          await updateDoc(eventRef, dataToUpdate);
-          await fetchUserData(user.uid);
-          setEventToEdit(null);
-      } catch (error) {
-          console.error('Error updating event:', error);
-          throw error;
-      } finally {
-          setIsProcessingEvent(false);
-      }
-  };
-
-   const handleDeleteEvent = async (eventIdToDelete: string): Promise<void> => {
-        if (!user || deletingEventId) return Promise.reject("Already deleting or not logged in");
-        setDeletingEventId(eventIdToDelete);
-        try {
-            const eventRef = doc(db, 'loggedEvents', eventIdToDelete);
-            await deleteDoc(eventRef);
-            setLoggedEvents(prevEvents => prevEvents.filter(event => event.id !== eventIdToDelete));
-        } catch (error) {
-            console.error('handleDeleteEvent: Error during delete:', error);
-            toast({ title: "Error", description: "Failed to delete event.", variant: "destructive" });
-            throw error;
-        } finally {
-            setDeletingEventId(null);
-        }
+  // Function to add a new time log event
+  const addTimeLog = useCallback((event: Omit<LoggedEvent, 'id' | 'timestamp'>) => {
+    const newEvent: LoggedEvent = {
+      ...event,
+      id: Date.now().toString(), // Simple unique ID
+      timestamp: new Date().toISOString(),
     };
+    setLoggedEvents(prevEvents => [...prevEvents, newEvent]);
+    toast({ title: "Success", description: "Time log entry added." });
+  }, [setLoggedEvents, toast]);
 
-   const handleEditEventStart = (event: LoggedEvent) => {
-       setEventToEdit(event);
-       setActiveTab('log-time');
-       setTimeout(() => {
-           timeLogFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-       }, 100);
-   };
-
-   const handleCancelEdit = () => {
-       setEventToEdit(null);
-   };
-
-  // --- Auth Handlers ---
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-    } catch (error) {
-      console.error('Logout Error:', error);
-      toast({ title: "Logout Error", description: "An error occurred during logout.", variant: "destructive" });
+  // Add a new advisor
+  const addAdvisor = (name: string) => {
+    if (name && !advisors.find(a => a.name === name)) {
+      const newAdvisor: Advisor = { id: Date.now().toString(), name };
+      setAdvisors(prev => [...prev, newAdvisor]);
+      toast({ title: "Success", description: `Advisor '${name}' added.` });
+    } else if (advisors.find(a => a.name === name)) {
+      toast({ variant: "destructive", title: "Error", description: `Advisor '${name}' already exists.` });
+    } else {
+      toast({ variant: "destructive", title: "Error", description: "Advisor name cannot be empty." });
     }
   };
 
-  // --- Render Logic ---
-  if (!isClient || isLoading) {
-    return (
-         <div className="flex justify-center items-center min-h-screen">
-            <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-primary"></div>
-         </div>
-    );
-  }
+  // Remove an advisor
+  const removeAdvisor = (id: string) => {
+    const advisorToRemove = advisors.find(a => a.id === id);
+    // Prevent deletion if advisor is associated with logged events
+    if (loggedEvents.some(event => event.advisorId === id)) {
+      toast({
+        variant: "destructive",
+        title: "Deletion Failed",
+        description: `Cannot delete advisor '${advisorToRemove?.name}' as they have logged time entries.`,
+      });
+      return; // Stop the deletion process
+    }
 
-  if (!user) {
-    return (
-      <main className="container mx-auto p-4 md:p-8 flex justify-center items-center min-h-screen">
-         {authMode === 'login' ? (
-            <div className="text-center">
-               <LoginForm />
-               <p className="text-center text-sm mt-4">
-                  Don&apos;t have an account?{' '}
-                  <Button variant="link" onClick={() => setAuthMode('signup')} className="p-0 h-auto align-baseline">Sign up</Button>
-               </p>
-            </div>
-         ) : (
-             <div className="text-center">
-               <SignUpForm />
-                 <p className="text-center text-sm mt-4">
-                  Already have an account?{' '}
-                  <Button variant="link" onClick={() => setAuthMode('login')} className="p-0 h-auto align-baseline">Login</Button>
-               </p>
-            </div>
-         )}
-      </main>
-    );
-  }
+    setAdvisors(prev => prev.filter(a => a.id !== id));
+    if (advisorToRemove) {
+       toast({ title: "Success", description: `Advisor '${advisorToRemove.name}' removed.` });
+    } else {
+         toast({ variant: "warning", title: "Not Found", description: `Advisor not found.` });
+    }
+  };
 
-  // --- Main Authenticated View ---
+  // Edit an advisor's name
+  const editAdvisor = (id: string, newName: string) => {
+    if (!newName.trim()) {
+       toast({ variant: "destructive", title: "Error", description: "Advisor name cannot be empty." });
+       return;
+    }
+     // Check if the new name already exists (case-insensitive)
+    if (advisors.some(a => a.id !== id && a.name.toLowerCase() === newName.trim().toLowerCase())) {
+        toast({ variant: "destructive", title: "Error", description: `Advisor name '${newName.trim()}' already exists.` });
+        return;
+    }
+
+    let advisorName = '';
+    setAdvisors(prev => prev.map(a => {
+      if (a.id === id) {
+        advisorName = a.name; // Store original name for toast message
+        return { ...a, name: newName.trim() };
+      }
+      return a;
+    }));
+     toast({ title: "Success", description: `Advisor '${advisorName}' renamed to '${newName.trim()}'.` });
+  };
+
+   // Clear all logged events
+   const clearAllLogs = () => {
+       if (loggedEvents.length === 0) {
+           toast({ variant: "default", title: "Info", description: "There are no time logs to clear." });
+           return;
+       }
+       // Add confirmation dialog here if desired
+       setLoggedEvents([]);
+       toast({ title: "Success", description: "All time log entries cleared." });
+   };
+
+   // Delete a specific time log event
+   const deleteLogEntry = (id: string) => {
+       const entryExists = loggedEvents.some(event => event.id === id);
+       if (!entryExists) {
+           toast({ variant: "destructive", title: "Error", description: "Log entry not found." });
+           return;
+       }
+       setLoggedEvents(prevEvents => prevEvents.filter(event => event.id !== id));
+       toast({ title: "Success", description: "Log entry deleted." });
+   };
+
+   // Edit a specific time log event
+   const editLogEntry = (updatedEvent: LoggedEvent) => {
+       const index = loggedEvents.findIndex(event => event.id === updatedEvent.id);
+       if (index === -1) {
+           toast({ variant: "destructive", title: "Error", description: "Log entry not found for editing." });
+           return;
+       }
+       setLoggedEvents(prevEvents => {
+           const newEvents = [...prevEvents];
+           newEvents[index] = updatedEvent;
+           return newEvents;
+       });
+       toast({ title: "Success", description: "Log entry updated." });
+   };
+
+    // --- Task Management Functions (Removed) ---
+
+
+  // Handle active tab state for potential styling or conditional rendering
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    // console.log("Active Tab:", value);
+  };
+
   return (
-    <main className="container mx-auto p-4 md:p-8">
-      <header className="mb-4 relative flex justify-center items-center pt-2 pb-2">
-         <div className="text-center">
-           <h1 className="text-3xl md:text-4xl font-bold text-primary flex items-center justify-center gap-2">
-             <Activity className="h-8 w-8" /> Tempo
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+     <div className="min-h-screen bg-background text-foreground">
+       <div className="container mx-auto p-4 md:p-8">
+          {/* Header Section */}
+         <header className="flex justify-between items-center mb-6 pb-4 border-b">
+           <h1 className="text-3xl font-bold text-primary flex items-center">
+             <Clock className="mr-3 h-8 w-8" /> Tempo {/* Changed icon and text back */}
            </h1>
-           <p className="text-muted-foreground mt-1 text-center">Track your time effectively.</p>
-        </div>
-         <div className="absolute right-0 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
-           <ThemeToggle />
-           <Button variant="outline" onClick={handleLogout} className="flex items-center">
-              <LogOut className="mr-2 h-4 w-4" /> Logout
-           </Button>
-         </div>
-      </header>
+           <ThemeToggle /> {/* Fixed component name */}
+         </header>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        {/* Updated grid columns to 6 after removing Tasks tab */}
-        <TabsList className="grid w-full grid-cols-6 mb-6 bg-secondary rounded-lg p-1">
-          <TabsTrigger value="log-time" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-             <Clock className="mr-2 h-4 w-4" /> {eventToEdit ? 'Edit Event' : 'Log Time'}
-          </TabsTrigger>
-          <TabsTrigger value="view-logs" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-             <ListChecks className="mr-2 h-4 w-4" /> View Logs
-          </TabsTrigger>
-           <TabsTrigger value="reports" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <BarChart2 className="mr-2 h-4 w-4" /> Reports
-           </TabsTrigger>
-           <TabsTrigger value="visualizations" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <AreaChart className="mr-2 h-4 w-4" /> Visualizations
-           </TabsTrigger>
-           {/* Add Policy Search Tab Trigger */}
-           <TabsTrigger value="policy-search" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <FileSearch className="mr-2 h-4 w-4" /> Policy Search
-           </TabsTrigger>
-           {/* Removed Manage Tasks Tab Trigger */}
-           {/* <TabsTrigger value="manage-tasks" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <ListTodo className="mr-2 h-4 w-4" /> Manage Tasks
-           </TabsTrigger> */}
-           <TabsTrigger value="manage-advisors" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-             <Users className="mr-2 h-4 w-4" /> Manage Advisors
-          </TabsTrigger>
-        </TabsList>
+         {/* Main Content Area with Tabs */}
+         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+           {/* Changed from grid to flex-wrap for better responsiveness */}
+           <TabsList className="flex flex-wrap h-auto justify-center gap-2 mb-6 p-1">
+             <TabsTrigger value="time-log" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
+               <Clock className="mr-2 h-4 w-4" /> Time Log
+             </TabsTrigger>
+             <TabsTrigger value="summary" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
+               <Calendar className="mr-2 h-4 w-4" /> Summary
+             </TabsTrigger>
+              {/* Added Reports Tab Trigger */}
+              <TabsTrigger value="reports" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
+                 <AreaChart className="mr-2 h-4 w-4" /> Reports
+              </TabsTrigger>
+             {/* Added Visualizations Tab Trigger */}
+             <TabsTrigger value="visualizations" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
+                <AreaChart className="mr-2 h-4 w-4" /> Visualizations
+             </TabsTrigger>
+             {/* Add Policy Search Tab Trigger */}
+             <TabsTrigger value="policy-search" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
+                <FileSearch className="mr-2 h-4 w-4" /> Policy Search
+             </TabsTrigger>
+             {/* Removed Manage Tasks Tab Trigger */}
+             <TabsTrigger value="manage-advisors" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
+               <Users className="mr-2 h-4 w-4" /> Manage Advisors
+             </TabsTrigger>
+           </TabsList>
 
-        {/* Log Time / Edit Time Tab */}
-        <TabsContent value="log-time">
-           <div ref={timeLogFormRef}>
-             <TimeLogForm
-               advisors={advisors}
-               // Removed tasks prop
-               // tasks={tasks}
-               onLogEvent={handleLogEvent}
-               onUpdateEvent={handleUpdateEvent}
-               onCancelEdit={handleCancelEdit}
-               eventToEdit={eventToEdit}
-               isSubmitting={isProcessingEvent}
-             />
-           </div>
-        </TabsContent>
+           {/* Tab Content Sections */}
+           <TabsContent value="time-log">
+             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+               <div className="lg:col-span-1">
+                 {/* Removed tasks prop */}
+                 <TimeLogForm advisors={advisors} onSubmit={addTimeLog} />
+               </div>
+               <div className="lg:col-span-2">
+                 <EventList
+                    events={loggedEvents}
+                    advisors={advisors}
+                    // Removed tasks prop
+                    onDelete={deleteLogEntry}
+                    onEdit={editLogEntry}
+                    onClearAll={clearAllLogs}
+                   />
+               </div>
+             </div>
+           </TabsContent>
 
-        {/* View Logs Tab */}
-        <TabsContent value="view-logs">
-           <EventList
-             events={loggedEvents}
-             advisors={advisors}
-             // Removed tasks prop
-             // tasks={tasks}
-             onDeleteEvent={handleDeleteEvent}
-             onEditEvent={handleEditEventStart}
-             deletingId={deletingEventId}
-           />
-        </TabsContent>
+           <TabsContent value="summary">
+              {/* Updated ExportVisualizationLayout usage */}
+              {/* Assuming ExportVisualizationLayout is self-contained or context-driven now */}
+              <TimeLogSummary loggedEvents={loggedEvents} advisors={advisors} />
+           </TabsContent>
 
-        {/* Reports Tab */}
-         <TabsContent value="reports">
-             <ReportSection
-                loggedEvents={loggedEvents}
-                advisors={advisors}
-                // Removed tasks prop
-                // tasks={tasks}
-              />
-         </TabsContent>
+           {/* Reports Tab */}
+           <TabsContent value="reports">
+               <ReportSection
+                  loggedEvents={loggedEvents}
+                  advisors={advisors}
+                />
+           </TabsContent>
 
-        {/* Visualizations Tab */}
-        <TabsContent value="visualizations">
-            <VisualizationsSection
-                loggedEvents={loggedEvents}
-                advisors={advisors}
-                // Removed tasks prop
-                // tasks={tasks}
-            />
-         </TabsContent>
+           {/* Visualizations Tab */}
+           <TabsContent value="visualizations">
+               <VisualizationsSection
+                   loggedEvents={loggedEvents}
+                   advisors={advisors}
+               />
+            </TabsContent>
 
-        {/* Policy Search Tab */}
-        <TabsContent value="policy-search">
-            <PolicySearch />
-        </TabsContent>
+           {/* Policy Search Tab */}
+           <TabsContent value="policy-search">
+               <PolicySearch
+                  policyData={policyData}
+                  setPolicyData={setPolicyData}
+                  fileName={policyFileName}
+                  setFileName={setPolicyFileName}
+                  isLoading={isPolicyLoading}
+                  setIsLoading={setIsPolicyLoading}
+                  parseError={policyParseError}
+                  setParseError={setPolicyParseError} />
+           </TabsContent>
 
-        {/* Removed Manage Tasks Tab Content */}
-        {/* <TabsContent value="manage-tasks">
-            <TaskManager
-                tasks={tasks}
-                onAddTask={handleAddTask}
-                onRemoveTask={handleRemoveTask}
-                isAdding={isAddingTask}
-                removingId={removingTaskId}
-            />
-        </TabsContent> */}
+           {/* Removed Manage Tasks Tab Content */}
 
-        {/* Manage Advisors Tab */}
-        <TabsContent value="manage-advisors">
-          <AdvisorManager
-            advisors={advisors}
-            onAddAdvisor={handleAddAdvisor}
-            onRemoveAdvisor={handleRemoveAdvisor}
-            isAdding={isAddingAdvisor}
-            removingId={removingAdvisorId}
-          />
-        </TabsContent>
-      </Tabs>
-    </main>
+           <TabsContent value="manage-advisors">
+              {/* Removed isAdding/removingId props as they are handled internally now */}
+              <AdvisorManager advisors={advisors} onAddAdvisor={addAdvisor} onRemoveAdvisor={removeAdvisor} onEditAdvisor={editAdvisor} />
+           </TabsContent>
+         </Tabs>
+       </div>
+     </div>
+    </ThemeProvider>
   );
 }

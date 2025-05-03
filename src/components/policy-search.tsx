@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react'; // Keep useState for local search term/result
 import Papa from 'papaparse';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, Search, Upload, FileText, AlertCircle, CalendarClock, Receipt } from 'lucide-react'; // Added CalendarClock, Receipt
+import { Loader2, Search, Upload, FileText, AlertCircle, CalendarClock, Receipt, CheckCircle } from 'lucide-react'; // Added CheckCircle, removed Smile
 
 // Define the structure for policy information extracted from the CSV
 type PolicyInfo = {
@@ -18,9 +18,10 @@ type PolicyInfo = {
   currentGrossPremiumPerFrequency?: string; // Optional: Monthly premium amount
   maxNextPremiumCollectionDate?: string; // Optional: Next payment date
 };
+export type PolicyDataMap = Map<string, PolicyInfo>; // Export PolicyDataMap type
 
 // Type for the efficient lookup map
-type PolicyDataMap = Map<string, PolicyInfo>;
+// type PolicyDataMap = Map<string, PolicyInfo>; // Removed duplicate
 
 // Helper function to parse dd/MM/yyyy (or dd/MM/yyyy HH:mm:ss) and add 30 days
 function calculatePotentialCancellationDate(dateStr: string): string | null {
@@ -65,14 +66,110 @@ function calculatePotentialCancellationDate(dateStr: string): string | null {
   return null; // Return null if parsing fails
 }
 
+// Helper to parse dd/MM/yyyy string to Date object (ensure it handles time correctly)
+function parseDate(dateStr: string): Date | null { // Updated logic
+  if (!dateStr) return null;
+  const datePart = dateStr.split(' ')[0]; // Handle potential time part like '00:00:00'
+  const parts = datePart.split('/');
+  if (parts.length === 3) {
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10); // Month is 1-based
+    const year = parseInt(parts[2], 10);;
 
-export function PolicySearch() {
-  const [policyData, setPolicyData] = useState<PolicyDataMap>(new Map());
+    // Basic validation
+    if (!isNaN(day) && !isNaN(month) && !isNaN(year) && month >= 1 && month <= 12 && day >= 1 && day <= 31 && year >= 1900 && year <= 2100) {
+      try {
+        // Month is 0-based in Date constructor
+        const date = new Date(Date.UTC(year, month - 1, day)); // Use UTC to avoid timezone shifts affecting the date
+
+        // Double-check the constructed date in UTC
+        if (date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day) {
+           return date; // Return date at UTC midnight
+        } else {
+            console.warn("Invalid date components created invalid Date object:", dateStr);
+            return null;
+        }
+      } catch (e) {
+        console.error("Error parsing date:", dateStr, e);
+        return null;
+      }
+    } else {
+        console.warn("Parsed date components seem invalid:", { day, month, year }, "from", dateStr);
+    }
+  }
+  console.warn("Could not parse date string:", dateStr);
+  return null;
+}
+
+// Function to check the "Next Payment Cleared" status (REVISED LOGIC)
+function checkNextPaymentCleared(policy: PolicyInfo): boolean { // Revised logic
+  // Condition 1: Must have 1 or 2 missed payments previously.
+  if (!(policy.missedPayments.length > 0 && policy.missedPayments.length < 3)) {
+    return false;
+  }
+
+  // Condition 2: Get the date of the *last* missed payment.
+  const lastMissedPaymentDateStr = policy.missedPayments[policy.missedPayments.length - 1];
+  const lastMissedPaymentDate = parseDate(lastMissedPaymentDateStr);
+  if (!lastMissedPaymentDate) {
+      console.warn("Could not parse lastMissedPaymentDate for 'cleared' check:", lastMissedPaymentDateStr);
+      return false; // Cannot proceed without the last missed date
+  }
+
+  // Condition 3: Calculate the expected date of the payment that *should have* followed the last missed one.
+  // ASSUMPTION: Payments are strictly monthly.
+  const clearedPaymentDueDate = new Date(lastMissedPaymentDate);
+  clearedPaymentDueDate.setUTCMonth(clearedPaymentDueDate.getUTCMonth() + 1);
+
+  // Condition 4: Check the 'Max. Next Premium Collection Date'. It must exist and be AFTER the calculated cleared payment date.
+  if (!policy.maxNextPremiumCollectionDate) {
+      return false; // Need this info to confirm the policy is looking ahead.
+  }
+  const nextScheduledDueDate = parseDate(policy.maxNextPremiumCollectionDate);
+  if (!nextScheduledDueDate) {
+      console.warn("Could not parse maxNextPremiumCollectionDate for 'cleared' check:", policy.maxNextPremiumCollectionDate);
+      return false; // Cannot proceed if next scheduled date is invalid
+  }
+
+  // If the next scheduled date is not later than the one we assume cleared, it implies the `clearedPaymentDueDate` was missed.
+  if (nextScheduledDueDate.getTime() <= clearedPaymentDueDate.getTime()) {
+      return false;
+  }
+
+  // Condition 5: Check if at least 5 days have passed since the inferred cleared payment date.
+  const currentDate = new Date();
+  const currentUTCDate = Date.UTC(currentDate.getUTCFullYear(), currentDate.getUTCMonth(), currentDate.getUTCDate());
+
+  const fiveDaysInMillis = 5 * 24 * 60 * 60 * 1000;
+  const clearedDatePlus5Days = clearedPaymentDueDate.getTime() + fiveDaysInMillis;
+
+  return currentUTCDate >= clearedDatePlus5Days;
+}
+
+// Define Props Interface
+interface PolicySearchProps {
+  policyData: PolicyDataMap;
+  setPolicyData: React.Dispatch<React.SetStateAction<PolicyDataMap>>;
+  fileName: string | null;
+  setFileName: React.Dispatch<React.SetStateAction<string | null>>;
+  isLoading: boolean;
+  setIsLoading: React.Dispatch<React.SetStateAction<boolean>>;
+  parseError: string | null;
+  setParseError: React.Dispatch<React.SetStateAction<string | null>>;
+}
+
+export function PolicySearch({
+  policyData,
+  setPolicyData,
+  fileName,
+  setFileName,
+  isLoading,
+  setIsLoading,
+  parseError,
+  setParseError
+}: PolicySearchProps) {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [searchResult, setSearchResult] = useState<PolicyInfo | null | 'not_found'> (null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [parseError, setParseError] = useState<string | null>(null);
-  const [fileName, setFileName] = useState<string | null>(null);
 
   // --- CSV Column Header Constants --- (Using actual headers from user CSV)
   const POLICY_NUMBER_COL = 'Policy Number';
@@ -224,7 +321,7 @@ export function PolicySearch() {
         setFileName(null);
       },
     });
-  }, []);
+  }, [setPolicyData, setFileName, setIsLoading, setParseError]); // Updated dependencies
 
   const handleSearch = useCallback(() => {
     if (!searchTerm) {
@@ -233,7 +330,7 @@ export function PolicySearch() {
     }
     const result = policyData.get(searchTerm.trim());
     setSearchResult(result || 'not_found');
-  }, [searchTerm, policyData]);
+  }, [searchTerm, policyData]); // Use policyData prop here
 
   // Updated to handle specific statuses from the CSV
   const getStatusColor = (status: string): string => {
@@ -270,7 +367,7 @@ export function PolicySearch() {
         {/* File Upload Section */}
         <div className="space-y-2">
           <label htmlFor="policy-csv-upload" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-            Upload Policy CSV
+            Upload most recent dashboard
           </label>
           <div className="flex items-center space-x-2">
             <Input
@@ -324,6 +421,13 @@ export function PolicySearch() {
                 <CardContent className="p-4 space-y-2">
                   <p><strong>Policy Number:</strong> {searchResult.policyNumber}</p>
                   <p><strong>Status:</strong> <span className={`font-semibold ${getStatusColor(searchResult.status)}`}>{searchResult.status.replace(/_/g, ' ').toUpperCase()}</span></p>
+
+                   {/* Display Next Payment Cleared Status */}
+                   {checkNextPaymentCleared(searchResult) && (
+                     <p className="flex items-center text-green-600 font-semibold">
+                       <CheckCircle className="mr-2 h-4 w-4" /> Next payment cleared {/* Changed icon */}
+                     </p>
+                   )}
 
                   {/* Display Monthly Premium */}
                   {searchResult.currentGrossPremiumPerFrequency && (

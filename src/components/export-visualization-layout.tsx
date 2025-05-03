@@ -28,13 +28,11 @@ interface ExportVisualizationLayoutProps {
   advisorTimeBreakdownData: ChartData;
   timeTrendData: ChartData;
   currentFiltersText: string;
-  // Optional: Pass a ref from the parent if needed, or manage internally
-  // exportRef: React.RefObject<HTMLDivElement>; 
 }
 
 // ForwardRef allows the parent component to pass a ref down to the DOM element
 export const ExportVisualizationLayout = React.forwardRef<HTMLDivElement, ExportVisualizationLayoutProps>((
-  { advisorTimeData, advisorTimeBreakdownData, timeTrendData, currentFiltersText }, 
+  { advisorTimeData, advisorTimeBreakdownData, timeTrendData, currentFiltersText },
   ref
 ) => {
 
@@ -44,7 +42,7 @@ export const ExportVisualizationLayout = React.forwardRef<HTMLDivElement, Export
 
   // Chart options for export (no animation)
   const commonChartOptions = {
-    responsive: true, 
+    responsive: true,
     maintainAspectRatio: false, // Allow charts to fill their containers
     animation: { duration: 0 }, // No animation for static export
     plugins: {
@@ -59,9 +57,9 @@ export const ExportVisualizationLayout = React.forwardRef<HTMLDivElement, Export
 
   return (
     // Apply fixed size, background, padding, and layout using Tailwind
-    <div 
+    <div
       ref={ref} // Attach the forwarded ref here
-      className="bg-white text-black p-6 shadow-lg grid grid-cols-2 grid-rows-[auto_1fr_1fr] gap-6" 
+      className="bg-white text-black p-6 shadow-lg grid grid-cols-2 grid-rows-[auto_1fr_1fr] gap-6"
       style={{ width: `${exportWidth}px`, height: `${exportHeight}px` }}
     >
       {/* Header Section - Spanning both columns */}
@@ -74,7 +72,7 @@ export const ExportVisualizationLayout = React.forwardRef<HTMLDivElement, Export
       <div className="border rounded-lg p-4 flex flex-col" style={{ height: '300px' }}>
         <h3 className="text-lg font-semibold text-center mb-2">Time Logged Per Advisor</h3>
         <div className="flex-grow relative">
-          {advisorTimeData.datasets.length > 0 ? (
+          {advisorTimeData && advisorTimeData.datasets.length > 0 ? ( // Added check for advisorTimeData
             <Bar data={advisorTimeData} options={commonChartOptions} />
           ) : (
             <p className="text-center text-gray-500">No data</p>
@@ -86,7 +84,7 @@ export const ExportVisualizationLayout = React.forwardRef<HTMLDivElement, Export
       <div className="border rounded-lg p-4 flex flex-col" style={{ height: '300px' }}>
         <h3 className="text-lg font-semibold text-center mb-2">Time Breakdown by Advisor</h3>
         <div className="flex-grow relative flex justify-center items-center">
-          {advisorTimeBreakdownData.datasets.length > 0 ? (
+          {advisorTimeBreakdownData && advisorTimeBreakdownData.datasets.length > 0 ? ( // Added check for advisorTimeBreakdownData
             <div className="relative w-full h-full max-w-[250px] max-h-[250px]">
                 <Doughnut data={advisorTimeBreakdownData} options={{...commonChartOptions, maintainAspectRatio: true}} />
             </div>
@@ -100,7 +98,7 @@ export const ExportVisualizationLayout = React.forwardRef<HTMLDivElement, Export
       <div className="col-span-2 border rounded-lg p-4 flex flex-col" style={{ height: '300px' }}>
         <h3 className="text-lg font-semibold text-center mb-2">Daily Time Log Trend</h3>
         <div className="flex-grow relative">
-          {timeTrendData.datasets.length > 0 ? (
+          {timeTrendData && timeTrendData.datasets.length > 0 ? ( // Added check for timeTrendData
             <Line data={timeTrendData} options={commonChartOptions} />
           ) : (
             <p className="text-center text-gray-500">No data</p>
