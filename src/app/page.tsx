@@ -24,14 +24,12 @@ import { useToast } from "@/hooks/use-toast";
 
 import { PolicyDataMap } from '@/components/policy-search'; // Import necessary type
 
-// Import the new logo component
-import { TempoLogo } from '@/components/tempo-logo';
+// Removed TempoLogo import
+// import { TempoLogo } from '@/components/tempo-logo';
 
 export default function Home() {
   const { toast } = useToast();
   const [loggedEvents, setLoggedEvents] = useLocalStorage<LoggedEvent[]>('timeLogEvents', []);
-  // Removed tasks state
-  // const [tasks, setTasks] = useLocalStorage<Task[]>('tasks', []);
   const [advisors, setAdvisors] = useLocalStorage<Advisor[]>('advisors', []);
   const [activeTab, setActiveTab] = useState('time-log');
 
@@ -128,9 +126,10 @@ export default function Home() {
            toast({ variant: "destructive", title: "Error", description: "Log entry not found." });
            return;
        }
-       setLoggedEvents(prevEvents => prevEvents.filter(event => event.id === id));
+       setLoggedEvents(prevEvents => prevEvents.filter(event => event.id !== id)); // Corrected logic
        toast({ title: "Success", description: "Log entry deleted." });
    };
+
 
    // Edit a specific time log event
    const editLogEntry = (updatedEvent: LoggedEvent) => {
@@ -147,32 +146,29 @@ export default function Home() {
        toast({ title: "Success", description: "Log entry updated." });
    };
 
-    // --- Task Management Functions (Removed) ---
-
 
   // Handle active tab state for potential styling or conditional rendering
   const handleTabChange = (value: string) => {
     setActiveTab(value);
-    // console.log("Active Tab:", value);
   };
 
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
      <div className="min-h-screen bg-background text-foreground">
        <div className="container mx-auto p-4 md:p-8">
-          {/* Header Section */}
-         <header className="flex justify-between items-center mb-6 pb-4 border-b">
-           {/* Replaced h1 content with TempoLogo component */}
-           <div className="flex items-center"> {/* Wrapper div for logo */}
-              <TempoLogo className="h-8 w-auto" /> {/* Adjust size as needed */}
-           </div>
-           <ThemeToggle /> {/* Fixed component name */}
+
+         {/* Header Section with Text Title and Theme Toggle */}
+         <header className="flex justify-center items-center mb-8 pb-4 border-b">
+            {/* Text-based Title - Apply minecraft font */}
+            <h1 className="text-5xl font-minecraft font-bold text-primary tracking-tight">
+                Tempo
+            </h1>
+           {/* Theme Toggle remains */}
+           {/*<ThemeToggle />*/}
          </header>
 
          {/* Main Content Area with Tabs */}
          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-           {/* Changed from grid to flex-wrap for better responsiveness */}
-           {/* Added margin-bottom to create space */}
            <TabsList className="flex flex-wrap h-auto justify-center gap-2 mb-8 p-1">
              <TabsTrigger value="time-log" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
                <Clock className="mr-2 h-4 w-4" /> Time Log
@@ -180,19 +176,15 @@ export default function Home() {
              <TabsTrigger value="summary" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
                <Calendar className="mr-2 h-4 w-4" /> Summary
              </TabsTrigger>
-              {/* Added Reports Tab Trigger */}
               <TabsTrigger value="reports" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
                  <AreaChart className="mr-2 h-4 w-4" /> Reports
               </TabsTrigger>
-             {/* Added Visualizations Tab Trigger */}
              <TabsTrigger value="visualizations" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
                 <AreaChart className="mr-2 h-4 w-4" /> Visualizations
              </TabsTrigger>
-             {/* Add Policy Search Tab Trigger */}
              <TabsTrigger value="policy-search" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
                 <FileSearch className="mr-2 h-4 w-4" /> Policy Search
              </TabsTrigger>
-             {/* Removed Manage Tasks Tab Trigger */}
              <TabsTrigger value="manage-advisors" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
                <Users className="mr-2 h-4 w-4" /> Manage Advisors
              </TabsTrigger>
@@ -202,42 +194,31 @@ export default function Home() {
            <TabsContent value="time-log">
              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                <div className="lg:col-span-1">
-                 {/* Removed tasks prop */}
                  <TimeLogForm
                      advisors={advisors}
-                     // Placeholder functions/props for eventToEdit handling
-                     // You'll need to manage the state for eventToEdit in the parent component
-                     // eventToEdit={null} // Pass actual event or null
-                     // onUpdateEvent={async () => {}} // Implement update logic
-                     // onCancelEdit={() => {}} // Implement cancel logic
-                     onLogEvent={addTimeLog} // Use the existing addTimeLog
-                     isSubmitting={false} // Manage submission state if needed
+                     onLogEvent={addTimeLog}
                      onUpdateEvent={async (id, data) => editLogEntry({...data, id })}
                      onCancelEdit={() => {/* Add logic to reset edit state if needed */}}
-                     eventToEdit={null} // Pass the actual event to edit here if applicable
-                     // isSubmitting={false} // Manage submitting state here
+                     eventToEdit={null}
+                     isSubmitting={false}
                  />
                </div>
                <div className="lg:col-span-2">
                  <EventList
                     events={loggedEvents}
                     advisors={advisors}
-                    // Removed tasks prop
-                    onDeleteEvent={async (id) => deleteLogEntry(id)} // Pass delete function
-                    onEditEvent={(event) => { /* Add logic to set the eventToEdit state */ }} // Pass edit function
-                    deletingId={null} // Pass deleting state if needed
+                    onDeleteEvent={async (id) => deleteLogEntry(id)}
+                    onEditEvent={(event) => { /* Add logic to set the eventToEdit state */ }}
+                    deletingId={null}
                    />
                </div>
              </div>
            </TabsContent>
 
            <TabsContent value="summary">
-              {/* Updated ExportVisualizationLayout usage */}
-              {/* Assuming ExportVisualizationLayout is self-contained or context-driven now */}
               <TimeLogSummary loggedEvents={loggedEvents} advisors={advisors} />
            </TabsContent>
 
-           {/* Reports Tab */}
            <TabsContent value="reports">
                <ReportSection
                   loggedEvents={loggedEvents}
@@ -245,7 +226,6 @@ export default function Home() {
                 />
            </TabsContent>
 
-           {/* Visualizations Tab */}
            <TabsContent value="visualizations">
                <VisualizationsSection
                    loggedEvents={loggedEvents}
@@ -253,7 +233,6 @@ export default function Home() {
                />
             </TabsContent>
 
-           {/* Policy Search Tab */}
            <TabsContent value="policy-search">
                <PolicySearch
                   policyData={policyData}
@@ -266,10 +245,7 @@ export default function Home() {
                   setParseError={setPolicyParseError} />
            </TabsContent>
 
-           {/* Removed Manage Tasks Tab Content */}
-
            <TabsContent value="manage-advisors">
-              {/* Removed isAdding/removingId props as they are handled internally now */}
               <AdvisorManager advisors={advisors} onAddAdvisor={addAdvisor} onRemoveAdvisor={removeAdvisor} onEditAdvisor={editAdvisor} />
            </TabsContent>
          </Tabs>
@@ -278,3 +254,4 @@ export default function Home() {
     </ThemeProvider>
   );
 }
+
