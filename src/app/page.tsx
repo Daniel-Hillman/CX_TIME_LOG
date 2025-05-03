@@ -157,14 +157,16 @@ export default function Home() {
      <div className="min-h-screen bg-background text-foreground">
        <div className="container mx-auto p-4 md:p-8">
 
-         {/* Header Section with Text Title and Theme Toggle */}
-         <header className="flex justify-center items-center mb-8 pb-4 border-b">
-            {/* Text-based Title - Apply minecraft font */}
+         {/* Header Section with Centered Title and Right-aligned Theme Toggle */}
+         <header className="flex justify-center items-center relative mb-8 pb-4 border-b">
+            {/* Text-based Title - Centered */}
             <h1 className="text-5xl font-minecraft font-bold text-primary tracking-tight">
                 Tempo
             </h1>
-           {/* Theme Toggle remains */}
-           {/*<ThemeToggle />*/}
+           {/* Theme Toggle: Positioned absolutely to the right */}
+           <div className="absolute right-0 top-1/2 transform -translate-y-1/2">
+             <ThemeToggle />
+           </div>
          </header>
 
          {/* Main Content Area with Tabs */}
