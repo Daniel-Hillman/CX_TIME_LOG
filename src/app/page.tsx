@@ -24,6 +24,9 @@ import { useToast } from "@/hooks/use-toast";
 
 import { PolicyDataMap } from '@/components/policy-search'; // Import necessary type
 
+// Import the new logo component
+import { TempoLogo } from '@/components/tempo-logo';
+
 export default function Home() {
   const { toast } = useToast();
   const [loggedEvents, setLoggedEvents] = useLocalStorage<LoggedEvent[]>('timeLogEvents', []);
@@ -125,7 +128,7 @@ export default function Home() {
            toast({ variant: "destructive", title: "Error", description: "Log entry not found." });
            return;
        }
-       setLoggedEvents(prevEvents => prevEvents.filter(event => event.id !== id));
+       setLoggedEvents(prevEvents => prevEvents.filter(event => event.id === id));
        toast({ title: "Success", description: "Log entry deleted." });
    };
 
@@ -159,16 +162,18 @@ export default function Home() {
        <div className="container mx-auto p-4 md:p-8">
           {/* Header Section */}
          <header className="flex justify-between items-center mb-6 pb-4 border-b">
-           <h1 className="text-3xl font-bold text-primary flex items-center">
-             <Clock className="mr-3 h-8 w-8" /> Tempo {/* Changed icon and text back */}
-           </h1>
+           {/* Replaced h1 content with TempoLogo component */}
+           <div className="flex items-center"> {/* Wrapper div for logo */}
+              <TempoLogo className="h-8 w-auto" /> {/* Adjust size as needed */}
+           </div>
            <ThemeToggle /> {/* Fixed component name */}
          </header>
 
          {/* Main Content Area with Tabs */}
          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
            {/* Changed from grid to flex-wrap for better responsiveness */}
-           <TabsList className="flex flex-wrap h-auto justify-center gap-2 mb-6 p-1">
+           {/* Added margin-bottom to create space */}
+           <TabsList className="flex flex-wrap h-auto justify-center gap-2 mb-8 p-1">
              <TabsTrigger value="time-log" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
                <Clock className="mr-2 h-4 w-4" /> Time Log
              </TabsTrigger>
@@ -198,16 +203,29 @@ export default function Home() {
              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                <div className="lg:col-span-1">
                  {/* Removed tasks prop */}
-                 <TimeLogForm advisors={advisors} onSubmit={addTimeLog} />
+                 <TimeLogForm
+                     advisors={advisors}
+                     // Placeholder functions/props for eventToEdit handling
+                     // You'll need to manage the state for eventToEdit in the parent component
+                     // eventToEdit={null} // Pass actual event or null
+                     // onUpdateEvent={async () => {}} // Implement update logic
+                     // onCancelEdit={() => {}} // Implement cancel logic
+                     onLogEvent={addTimeLog} // Use the existing addTimeLog
+                     isSubmitting={false} // Manage submission state if needed
+                     onUpdateEvent={async (id, data) => editLogEntry({...data, id })}
+                     onCancelEdit={() => {/* Add logic to reset edit state if needed */}}
+                     eventToEdit={null} // Pass the actual event to edit here if applicable
+                     // isSubmitting={false} // Manage submitting state here
+                 />
                </div>
                <div className="lg:col-span-2">
                  <EventList
                     events={loggedEvents}
                     advisors={advisors}
                     // Removed tasks prop
-                    onDelete={deleteLogEntry}
-                    onEdit={editLogEntry}
-                    onClearAll={clearAllLogs}
+                    onDeleteEvent={async (id) => deleteLogEntry(id)} // Pass delete function
+                    onEditEvent={(event) => { /* Add logic to set the eventToEdit state */ }} // Pass edit function
+                    deletingId={null} // Pass deleting state if needed
                    />
                </div>
              </div>
