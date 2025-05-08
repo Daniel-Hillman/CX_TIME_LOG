@@ -120,7 +120,7 @@ export default function Home() {
               // Convert Firestore Timestamp to ISO String for components
               timestamp: (data.timestamp as Timestamp)?.toDate().toISOString() ?? new Date().toISOString(),
               // Convert Firestore date string (YYYY-MM-DD) if needed, assume it's stored correctly
-              date: data.date, 
+              date: data.date,
           } as LoggedEvent;
       });
       setLoggedEvents(eventsData);
@@ -315,7 +315,7 @@ export default function Home() {
             // Convert timestamp back to Firestore Timestamp
             timestamp: Timestamp.fromDate(new Date(updatedEvent.timestamp)),
             // userId should generally not be changed, but could be added if needed
-            // userId: updatedEvent.userId 
+            // userId: updatedEvent.userId
         };
 
         // Remove undefined fields to avoid overwriting with undefined in Firestore
@@ -385,19 +385,19 @@ export default function Home() {
        <div className="container mx-auto p-4 md:p-8">
 
          <header className="flex justify-center items-center relative mb-8 pb-4 border-b">
-            {/* Display logo using NextImage */}
-             <div className="w-48 h-16 relative"> {/* Adjust width and height as needed */}
-                <Image 
-                    src="/Tempo_logo_transparent.png" 
-                    alt="Tempo Logo" 
-                    layout="fill" 
-                    objectFit="contain" 
-                    priority // Add priority if it's LCP
+             <div className="w-48 h-16 relative">
+                <Image
+                    src="https://picsum.photos/192/64" // Placeholder, replace with /Tempo_logo_transparent.png if it's in /public
+                    alt="Tempo Logo"
+                    layout="fill" // Or use width/height directly if fill causes issues without explicit parent sizing
+                    objectFit="contain"
+                    priority
                     data-ai-hint="company logo"
+                    width={192} // Explicit width if layout="fill" is problematic
+                    height={64} // Explicit height
                 />
             </div>
             <div className="absolute right-0 top-1/2 transform -translate-y-1/2 flex items-center space-x-2">
-                {/* Display user email if available */} 
                 {user.email && <span className="text-sm text-muted-foreground hidden md:inline">{user.email}</span>}
                 <ThemeToggle />
                 <Button variant="outline" size="icon" onClick={handleLogout} title="Logout">
@@ -406,17 +406,14 @@ export default function Home() {
             </div>
          </header>
 
-         {/* Data Loading Indicator */} 
          {isLoadingData ? (
              <div className="flex justify-center items-center py-10">
                 <Loader2 className="h-6 w-6 animate-spin mr-3" />
                 Loading Data...
             </div>
          ) : (
-             /* Main App Content */
              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                  <TabsList className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:flex lg:flex-wrap h-auto justify-center gap-2 mb-8 p-1">
-                     {/* Tab Triggers */} 
                      <TabsTrigger value="time-log" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
                      <Clock className="mr-2 h-4 w-4" /> Time Log
                      </TabsTrigger>
@@ -432,7 +429,6 @@ export default function Home() {
                      <TabsTrigger value="policy-search" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
                          <FileSearch className="mr-2 h-4 w-4" /> Policy Search
                      </TabsTrigger>
-                     {/* New Tab Trigger for Next Cleared Batch */}
                      <TabsTrigger value="next-cleared-batch" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
                          <FileCheck2 className="mr-2 h-4 w-4" /> Next Cleared Batch
                      </TabsTrigger>
@@ -441,14 +437,19 @@ export default function Home() {
                      </TabsTrigger>
                  </TabsList>
 
-                 {/* Tab Content */} 
                  <TabsContent value="time-log">
                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                          <div className="lg:col-span-1">
                              <TimeLogForm
                                  advisors={advisors}
                                  onLogEvent={addTimeLog}
-                                 onUpdateEvent={editLogEntry}
+                                 onUpdateEvent={(eventId, eventData) => { // Corrected onUpdateEvent signature
+                                    const eventToUpdate = loggedEvents.find(e => e.id === eventId);
+                                    if (eventToUpdate) {
+                                        const fullEventData = { ...eventToUpdate, ...eventData };
+                                        editLogEntry(fullEventData);
+                                    }
+                                 }}
                                  onCancelEdit={() => { /* TODO */ }}
                                  eventToEdit={null} /* TODO */
                                  isSubmitting={false} /* TODO */
@@ -491,7 +492,6 @@ export default function Home() {
                      />
                  </TabsContent>
 
-                {/* New Tab Content for Next Cleared Batch */}
                 <TabsContent value="next-cleared-batch">
                     <NextClearedBatch />
                 </TabsContent>
@@ -511,3 +511,5 @@ export default function Home() {
     </ThemeProvider>
   );
 }
+
+    
