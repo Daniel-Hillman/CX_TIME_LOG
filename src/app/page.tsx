@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -389,12 +390,10 @@ export default function Home() {
                 <Image
                     src="https://picsum.photos/192/64" // Placeholder, replace with /Tempo_logo_transparent.png if it's in /public
                     alt="Tempo Logo"
-                    layout="fill" // Or use width/height directly if fill causes issues without explicit parent sizing
+                    layout="fill" 
                     objectFit="contain"
                     priority
                     data-ai-hint="company logo"
-                    width={192} // Explicit width if layout="fill" is problematic
-                    height={64} // Explicit height
                 />
             </div>
             <div className="absolute right-0 top-1/2 transform -translate-y-1/2 flex items-center space-x-2">
