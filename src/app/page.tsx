@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -33,11 +34,13 @@ import { TimeLogSummary } from '@/components/time-log-summary';
 import { ReportSection } from '@/components/report-section';
 import { VisualizationsSection } from '@/components/visualizations-section';
 import { PolicySearch } from '@/components/policy-search';
+import NextClearedBatch from '@/components/next-cleared-batch'; // <-- Import the new component
 import { LoginForm } from '@/components/auth/login-form';
 import { SignUpForm } from '@/components/auth/signup-form';
 import { Button } from '@/components/ui/button';
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, Clock, Users, AreaChart, FileSearch, LogOut, Loader2 } from 'lucide-react'; // Added Loader2
+import { Calendar, Clock, Users, AreaChart, FileSearch, FileCheck2, LogOut, Loader2 } from 'lucide-react'; // Added FileCheck2 & Loader2
+import Image from 'next/image'; // Import NextImage
 
 // Types
 import { Advisor, LoggedEvent } from '@/types';
@@ -357,7 +360,9 @@ export default function Home() {
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
              <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-4">
                  <header className="flex justify-center items-center relative mb-8 pb-4 border-b w-full max-w-4xl">
-                    <h1 className="text-4xl md:text-5xl font-minecraft font-bold text-primary tracking-tight">Tempo</h1>
+                    <h1 className="font-minecraft text-4xl md:text-5xl text-primary">
+                       Tempo
+                    </h1>
                     <div className="absolute right-0 top-1/2 transform -translate-y-1/2">
                         <ThemeToggle />
                     </div>
@@ -380,7 +385,17 @@ export default function Home() {
        <div className="container mx-auto p-4 md:p-8">
 
          <header className="flex justify-center items-center relative mb-8 pb-4 border-b">
-            <h1 className="text-5xl font-minecraft font-bold text-primary tracking-tight">Tempo</h1>
+            {/* Display logo using NextImage */}
+             <div className="w-48 h-16 relative"> {/* Adjust width and height as needed */}
+                <Image 
+                    src="/Tempo_logo_transparent.png" 
+                    alt="Tempo Logo" 
+                    layout="fill" 
+                    objectFit="contain" 
+                    priority // Add priority if it's LCP
+                    data-ai-hint="company logo"
+                />
+            </div>
             <div className="absolute right-0 top-1/2 transform -translate-y-1/2 flex items-center space-x-2">
                 {/* Display user email if available */} 
                 {user.email && <span className="text-sm text-muted-foreground hidden md:inline">{user.email}</span>}
@@ -400,7 +415,7 @@ export default function Home() {
          ) : (
              /* Main App Content */
              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                 <TabsList className="flex flex-wrap h-auto justify-center gap-2 mb-8 p-1">
+                 <TabsList className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:flex lg:flex-wrap h-auto justify-center gap-2 mb-8 p-1">
                      {/* Tab Triggers */} 
                      <TabsTrigger value="time-log" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
                      <Clock className="mr-2 h-4 w-4" /> Time Log
@@ -416,6 +431,10 @@ export default function Home() {
                      </TabsTrigger>
                      <TabsTrigger value="policy-search" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
                          <FileSearch className="mr-2 h-4 w-4" /> Policy Search
+                     </TabsTrigger>
+                     {/* New Tab Trigger for Next Cleared Batch */}
+                     <TabsTrigger value="next-cleared-batch" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
+                         <FileCheck2 className="mr-2 h-4 w-4" /> Next Cleared Batch
                      </TabsTrigger>
                      <TabsTrigger value="manage-advisors" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
                      <Users className="mr-2 h-4 w-4" /> Manage Advisors
@@ -471,6 +490,11 @@ export default function Home() {
                          setParseError={setPolicyParseError}
                      />
                  </TabsContent>
+
+                {/* New Tab Content for Next Cleared Batch */}
+                <TabsContent value="next-cleared-batch">
+                    <NextClearedBatch />
+                </TabsContent>
 
                  <TabsContent value="manage-advisors">
                      <AdvisorManager

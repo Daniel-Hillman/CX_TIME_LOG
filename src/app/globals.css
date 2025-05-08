@@ -2,7 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Removed body font-family here, now handled by layout.tsx and tailwind.config.ts */
+/* Removed redundant @font-face and .font-minecraft utility */
+/* Font is now handled by next/font/local in layout.tsx and tailwind.config.ts */
 
 @layer base {
   :root {

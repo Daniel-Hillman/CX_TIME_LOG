@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google'; // Removed Geist_Mono
-import localFont from 'next/font/local'; // Import localFont
+import { Inter } from 'next/font/google';
+import localFont from 'next/font/local';
 import './globals.css';
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/toaster";
@@ -13,14 +13,15 @@ const inter = Inter({
 
 // Load Minecraft font using localFont
 const minecraft = localFont({
-  src: './Minecraft.ttf',       // Path relative to the layout file
-  variable: '--font-minecraft', // Assign a CSS variable
-  display: 'swap',            // Use swap for better performance
+  // Corrected path assuming font is in src/app/fonts/
+  src: './fonts/Minecraft.ttf', 
+  variable: '--font-minecraft', 
+  display: 'swap',            
 });
 
 export const metadata: Metadata = {
-  title: 'Tempo', // Updated title here too for consistency
-  description: 'Track your time effectively', // Updated description
+  title: 'Tempo', 
+  description: 'Track your time effectively', 
 };
 
 export default function RootLayout({
@@ -31,7 +32,8 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       {/* Apply font variables to the body or html */}
-      {/* Added minecraft.variable */}
+      {/* Use the font-sans utility which includes --font-sans (Inter) */}
+      {/* Tailwind will pick up --font-minecraft via the config for font-minecraft class */}
       <body className={`${inter.variable} ${minecraft.variable} font-sans antialiased`}>
          <ThemeProvider
             attribute="class"
