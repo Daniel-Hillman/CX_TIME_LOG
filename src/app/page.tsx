@@ -41,7 +41,7 @@ import { SignUpForm } from '@/components/auth/signup-form';
 import { Button } from '@/components/ui/button';
 import { useToast } from "@/hooks/use-toast";
 import { Calendar, Clock, Users, AreaChart, FileSearch, FileCheck2, LogOut, Loader2 } from 'lucide-react'; // Added FileCheck2 & Loader2
-import Image from 'next/image'; // Import NextImage
+// import Image from 'next/image'; // Import NextImage - No longer needed
 
 // Types
 import { Advisor, LoggedEvent } from '@/types';
@@ -361,7 +361,7 @@ export default function Home() {
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
              <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-4">
                  <header className="flex justify-center items-center relative mb-8 pb-4 border-b w-full max-w-4xl">
-                    <h1 className="font-minecraft text-4xl md:text-5xl text-primary">
+                    <h1 className="font-designer text-4xl md:text-5xl text-primary">
                        Tempo
                     </h1>
                     <div className="absolute right-0 top-1/2 transform -translate-y-1/2">
@@ -386,16 +386,9 @@ export default function Home() {
        <div className="container mx-auto p-4 md:p-8">
 
          <header className="flex justify-center items-center relative mb-8 pb-4 border-b">
-             <div className="w-48 h-16 relative">
-                <Image
-                    src="https://picsum.photos/192/64" // Placeholder, replace with /Tempo_logo_transparent.png if it's in /public
-                    alt="Tempo Logo"
-                    layout="fill" 
-                    objectFit="contain"
-                    priority
-                    data-ai-hint="company logo"
-                />
-            </div>
+            <h1 className="font-designer text-4xl md:text-5xl text-primary">
+                Tempo
+            </h1>
             <div className="absolute right-0 top-1/2 transform -translate-y-1/2 flex items-center space-x-2">
                 {user.email && <span className="text-sm text-muted-foreground hidden md:inline">{user.email}</span>}
                 <ThemeToggle />

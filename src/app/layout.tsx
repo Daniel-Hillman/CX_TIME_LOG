@@ -13,10 +13,16 @@ const inter = Inter({
 
 // Load Minecraft font using localFont
 const minecraft = localFont({
-  // Corrected path assuming font is in src/app/fonts/
   src: './fonts/Minecraft.ttf', 
   variable: '--font-minecraft', 
   display: 'swap',            
+});
+
+// Load custom Designer font
+const designer = localFont({
+  src: './fonts/Designer.otf',
+  variable: '--font-designer',
+  display: 'swap',
 });
 
 export const metadata: Metadata = {
@@ -31,10 +37,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      {/* Apply font variables to the body or html */}
-      {/* Use the font-sans utility which includes --font-sans (Inter) */}
-      {/* Tailwind will pick up --font-minecraft via the config for font-minecraft class */}
-      <body className={`${inter.variable} ${minecraft.variable} font-sans antialiased`}>
+      <body className={`${inter.variable} ${minecraft.variable} ${designer.variable} font-sans antialiased`}>
          <ThemeProvider
             attribute="class"
             defaultTheme="system"

@@ -13,8 +13,9 @@ export default {
       fontFamily: {
         sans: ["var(--font-sans)", ...fontFamily.sans],
         mono: ["var(--font-geist-mono)", ...fontFamily.mono], // Keep mono or update if needed
-        // Add the minecraft font family
         minecraft: ["var(--font-minecraft)", ...fontFamily.sans], // Fallback to sans-serif
+        serif: [...fontFamily.serif],
+        designer: ["var(--font-designer)", ...fontFamily.sans], // Added designer font with sans-serif fallback
       },
       colors: {
           background: 'hsl(var(--background))',

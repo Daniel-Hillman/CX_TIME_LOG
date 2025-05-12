@@ -220,10 +220,10 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
           }
         });
       } else {
-        // Use correct regex to split by newline (\n) or carriage return + newline (\r\n)
-        clearedPolicyNumbers = new Set(clearedBatchText.split(/\r?\n/).map(line => line.trim()).filter(line => line && line.length > 0));
+        clearedPolicyNumbers = new Set(clearedBatchText.split(new RegExp('?
+')).map(line => line.trim()).filter(line => line && line.length > 0));
       }
-
+      
       if (clearedPolicyNumbers.size === 0) {
         toast({ title: "No Policies in Batch", description: "The cleared batch file is empty or contains no policy numbers.", variant: "destructive" });
         setIsLoading(false);
@@ -255,7 +255,7 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
 
               actualHeaders.forEach(header => {
                 if (!policyEntry.hasOwnProperty(header) && row[header] !== undefined) {
-                    policyEntry[header] = String(row[header]);
+                    policyEntry[header] = String(row[header]); 
                 }
               });
 
@@ -268,7 +268,7 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
           if (policies.length > 0) {
             toast({ title: "Processing Complete", description: `${policies.length} matching and cleared policies found.` });
           } else {
-            toast({ title: "No Matches Found", description: "No policies from the dashboard matched the cleared batch OR met the 'next payment cleared' criteria.", variant: "default" });
+            toast({ title: "No Matches Found", description: "No policies from the dashboard matched the cleared batch OR met the 'next payment cleared' criteria.", variant: "default" }); 
           }
         },
         error: (error) => {
@@ -286,16 +286,23 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
   }, [dashboardFile, clearedBatchFile, toast]);
 
   const generateTextReport = (data: PolicyInfo[], headersToInclude: string[]): string => {
-    let report = "Next Cleared Batch Report\n";
-    report += "=====================================\n\n";
+    let report = "Next Cleared Batch Report
+";
+    report += "=====================================
+
+";
     data.forEach((policy, index) => {
-      report += `Policy #${index + 1}\n`;
-      report += `-------------------------------------\n`;
+      report += `Policy #${index + 1}
+`;
+      report += `-------------------------------------
+`;
       headersToInclude.forEach(header => {
         const value = policy[header] ?? 'N/A';
-        report += `${header}: ${value}\n`;
+        report += `${header}: ${value}
+`;
       });
-      report += "\n";
+      report += "
+";
     });
     return report;
   };
@@ -325,7 +332,7 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
         fileContent = Papa.unparse({
             fields: headers,
             data: processedData.map(policy => {
-                return headers.map(header => policy[header] ?? '');
+                return headers.map(header => policy[header] ?? ''); 
             })
         });
         mimeType = 'text/csv;charset=utf-8;';
@@ -359,7 +366,7 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
           </label>
           <Input
             ref={dashboardInputRef}
-            id="dashboard-file-next-cleared"
+            id="dashboard-file-next-cleared" 
             type="file"
             accept=".csv"
             onChange={handleDashboardFileChange}
@@ -374,7 +381,7 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
           </label>
           <Input
             ref={clearedBatchInputRef}
-            id="cleared-batch-file-next-cleared"
+            id="cleared-batch-file-next-cleared" 
             type="file"
             accept=".csv,.txt"
             onChange={handleClearedBatchFileChange}
@@ -400,7 +407,7 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
 
         {processedData.length > 0 && (
           <div className="space-y-4 pt-4">
-            <h3 className="text-lg font-medium">Processed Results ({processedData.length} Matching &amp; Cleared)</h3>
+            <h3 className="text-lg font-medium">Processed Results ({processedData.length} Matching & Cleared)</h3>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <Button onClick={() => downloadResults('csv')} className="w-full" variant="outline">
                     <Download className="mr-2 h-4 w-4" />
@@ -418,23 +425,23 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
 
             <Accordion type="single" collapsible className="w-full">
               {processedData.map((policy) => (
-                <AccordionItem
-                  value={policy.policyNumber}
-                  key={policy.policyNumber}
+                <AccordionItem 
+                  value={policy.policyNumber} 
+                  key={policy.policyNumber} 
                   className="bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800 rounded-md mb-2"
                 >
                   <AccordionTrigger className="text-green-700 dark:text-green-400 font-semibold hover:text-green-800 dark:hover:text-green-300 hover:no-underline px-3 py-3 text-sm">
                     <div className="flex items-center justify-between w-full">
                         <div className="flex items-center min-w-0">
-                            <CheckCircle className="mr-2 h-5 w-5 flex-shrink-0" />
+                            <CheckCircle className="mr-2 h-5 w-5 flex-shrink-0" /> 
                             <span className="truncate">{policy.policyNumber}</span>
                         </div>
-                        <Button
+                        <Button 
                             variant="ghost"
                             size="icon"
                             className="h-7 w-7 p-0 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 flex-shrink-0 ml-2"
                             onClick={(e) => {
-                                e.stopPropagation();
+                                e.stopPropagation(); 
                                 handleCopyToClipboard(policy.policyNumber);
                             }}
                             aria-label="Copy policy number"
@@ -449,7 +456,7 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
                         <strong>Status:</strong> <span className="font-medium">{policy.status.replace(/_/g, ' ').toUpperCase()}</span>
                       </p>
                       <p>
-                        <strong>Missed Payments:</strong>
+                        <strong>Missed Payments:</strong> 
                         {policy.missedPayments.length > 0 ? policy.missedPayments.join(', ') : 'None'}
                       </p>
                       {policy.maxNextPremiumCollectionDate && (
