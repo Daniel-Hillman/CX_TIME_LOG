@@ -109,6 +109,13 @@ function checkNextPaymentCleared(policy: PolicyInfo): boolean {
   const clearedDatePlus5Days = clearedPaymentDueDate.getTime() + fiveDaysInMillis;
   return currentUTCDate >= clearedDatePlus5Days;
 }
+
+// Helper to extract numeric part of policy number for sorting
+function extractPolicyNumberNumeric(policyNumber: string): number {
+  const match = policyNumber.match(/\d+$/);
+  return match ? parseInt(match[0], 10) : 0;
+}
+
 // --- End Helper Functions ---
 
 interface NextClearedBatchProps {}
@@ -142,10 +149,10 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
       if (err instanceof DOMException && err.name === 'NotAllowedError') {
         description = "Clipboard access was denied. This may be due to browser permissions or security settings in this environment.";
       }
-      toast({ 
-        title: "Copy Failed", 
+      toast({
+        title: "Copy Failed",
         description: description,
-        variant: "destructive" 
+        variant: "destructive"
       });
     }
   }, [toast]);
@@ -264,6 +271,15 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
               }
             }
           });
+
+          // Sort policies numerically based on the number part of the policy number
+          policies.sort((a, b) => {
+            const numA = extractPolicyNumberNumeric(a.policyNumber);
+            const numB = extractPolicyNumberNumeric(b.policyNumber);
+            return numA - numB;
+          });
+
+
           setProcessedData(policies);
           if (policies.length > 0) {
             toast({ title: "Processing Complete", description: `${policies.length} matching and cleared policies found.` });
@@ -292,8 +308,13 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
       report += `Policy #${index + 1}\n`;
       report += `-------------------------------------\n`;
       headersToInclude.forEach(header => {
-        const value = policy[header] ?? 'N/A';
-        report += `${header}: ${value}\n`;
+        // Handle array missedPayments specifically for text report
+        if (header === 'missedPayments') {
+             report += `Missed Payments: ${policy.missedPayments.length > 0 ? policy.missedPayments.join(', ') : 'None'}\n`;
+        } else {
+            const value = policy[header] ?? 'N/A';
+            report += `${header}: ${value}\n`;
+        }
       });
       report += "\n";
     });
@@ -306,17 +327,25 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
       return;
     }
 
-    const headers = dashboardHeaders.length > 0 ? dashboardHeaders : Object.keys(processedData[0] || {});
+    // Ensure headers are based on the actual data present in processedData, including dynamic ones
+    const headers = dashboardHeaders.length > 0 ? dashboardHeaders : (processedData.length > 0 ? Object.keys(processedData[0]) : []);
     let fileContent: string;
     let mimeType: string;
     let fileName: string;
 
-    const selectedHeaders = [POLICY_NUMBER_COL, STATUS_COL, 'missedPayments', 'maxNextPremiumCollectionDate'];
+    // Define specific headers for the TXT/PDF report
+    const textReportHeaders = [
+      POLICY_NUMBER_COL,
+      STATUS_COL,
+      'missedPayments', // Use the key name for the array
+      NEXT_PREMIUM_DATE_COL,
+       CURRENT_GROSS_PREMIUM_COL // Add other relevant headers if needed
+    ];
 
     switch (format) {
       case 'txt':
       case 'pdf': // For now, PDF will be a text file
-        fileContent = generateTextReport(processedData, selectedHeaders);
+        fileContent = generateTextReport(processedData, textReportHeaders);
         mimeType = 'text/plain;charset=utf-8;';
         fileName = `next_cleared_batch_results.${format}`;
         break;
@@ -325,7 +354,11 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
         fileContent = Papa.unparse({
             fields: headers,
             data: processedData.map(policy => {
-                return headers.map(header => policy[header] ?? '');
+                return headers.map(header => {
+                     // Join array fields for CSV, leave others as is
+                    const value = policy[header];
+                    return Array.isArray(value) ? value.join('; ') : (value ?? '');
+                });
             })
         });
         mimeType = 'text/csv;charset=utf-8;';
@@ -349,12 +382,12 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
         <CardTitle>Next Cleared Batch Processing</CardTitle>
         <CardDescription>
           Upload the daily dashboard CSV and the cleared batch file (CSV or TXT)
-          to find policies that have their next payment cleared.
+          to find policies that have their next payment cleared. Results are sorted by policy number.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="space-y-2">
-          <label htmlFor="dashboard-file-next-cleared" className="block text-sm font-medium text-gray-700">
+          <label htmlFor="dashboard-file-next-cleared" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
             Daily Dashboard File (CSV)
           </label>
           <Input
@@ -365,11 +398,11 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
             onChange={handleDashboardFileChange}
             className="mt-1"
           />
-          {dashboardFile && <p className="text-xs text-gray-500 mt-1">Selected: {dashboardFile.name}</p>}
+          {dashboardFile && <p className="text-xs text-muted-foreground mt-1">Selected: {dashboardFile.name}</p>}
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="cleared-batch-file-next-cleared" className="block text-sm font-medium text-gray-700">
+          <label htmlFor="cleared-batch-file-next-cleared" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
             Cleared Batch File (CSV or TXT with policy numbers)
           </label>
           <Input
@@ -380,7 +413,7 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
             onChange={handleClearedBatchFileChange}
             className="mt-1"
           />
-          {clearedBatchFile && <p className="text-xs text-gray-500 mt-1">Selected: {clearedBatchFile.name}</p>}
+          {clearedBatchFile && <p className="text-xs text-muted-foreground mt-1">Selected: {clearedBatchFile.name}</p>}
         </div>
 
         <div className="flex space-x-2">
@@ -421,18 +454,22 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
                 <AccordionItem
                   value={policy.policyNumber}
                   key={policy.policyNumber}
-                  className="bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800 rounded-md mb-2"
+                  // Removed background/border styling to rely on theme
+                  className="border-b rounded-md mb-2"
                 >
-                  <AccordionTrigger className="text-green-700 dark:text-green-400 font-semibold hover:text-green-800 dark:hover:text-green-300 hover:no-underline px-3 py-3 text-sm">
+                  <AccordionTrigger
+                    // Removed text color styling to rely on theme
+                    className="font-semibold hover:no-underline px-3 py-3 text-sm"
+                  >
                     <div className="flex items-center justify-between w-full">
                         <div className="flex items-center min-w-0">
-                            <CheckCircle className="mr-2 h-5 w-5 flex-shrink-0" />
+                            <CheckCircle className="mr-2 h-5 w-5 flex-shrink-0 text-green-600 dark:text-green-500" />
                             <span className="truncate">{policy.policyNumber}</span>
                         </div>
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 p-0 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 flex-shrink-0 ml-2"
+                            className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground flex-shrink-0 ml-2"
                             onClick={(e) => {
                                 e.stopPropagation();
                                 handleCopyToClipboard(policy.policyNumber);
@@ -443,8 +480,8 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
                         </Button>
                     </div>
                   </AccordionTrigger>
-                  <AccordionContent className="pt-2 pb-3 px-3 text-sm text-gray-700 dark:text-gray-300">
-                    <div className="space-y-1 pl-2 border-l-2 border-green-500 dark:border-green-700 ml-2">
+                  <AccordionContent className="pt-2 pb-3 px-3 text-sm text-foreground">
+                    <div className="space-y-1 pl-2 border-l-2 border-muted dark:border-muted-foreground/30 ml-2">
                       <p>
                         <strong>Status:</strong> <span className="font-medium">{policy.status.replace(/_/g, ' ').toUpperCase()}</span>
                       </p>
@@ -457,10 +494,10 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
                           <strong>Next Premium Collection:</strong> {policy.maxNextPremiumCollectionDate}
                         </p>
                       )}
-                      {/* Dynamically display other headers chosen for the text report */}
-                      {dashboardHeaders.filter(h => ![POLICY_NUMBER_COL, STATUS_COL, 'missedPayments', 'maxNextPremiumCollectionDate'].includes(h) && [POLICY_NUMBER_COL, STATUS_COL, 'missedPayments', 'maxNextPremiumCollectionDate'].includes(h) && policy[h] !== undefined).map(header => (
+                      {/* Dynamically display other headers, focusing on commonly checked ones */}
+                      {dashboardHeaders.filter(h => ![POLICY_NUMBER_COL, STATUS_COL, MISSED_PAYMENT_1_COL, MISSED_PAYMENT_2_COL, MISSED_PAYMENT_3_COL, NEXT_PREMIUM_DATE_COL].includes(h) && policy[h] !== undefined && policy[h] !== '').slice(0, 5).map(header => ( // Limit displayed extra fields
                         <p key={header}>
-                            <strong>{header.replace(/_/g, ' ').replace(/ \w/g, l => l.toUpperCase())}:</strong> {policy[header]}
+                            <strong className="capitalize">{header.replace(/_/g, ' ')}:</strong> {policy[header]}
                         </p>
                       ))}
                     </div>
