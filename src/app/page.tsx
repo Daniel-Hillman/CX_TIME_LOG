@@ -44,7 +44,8 @@ import { Calendar, Clock, Users, AreaChart, FileSearch, FileCheck2, LogOut, Load
 import Image from 'next/image'; // Import NextImage
 
 // Types
-import { Advisor, LoggedEvent, StandardEventType } from '@/types';
+// Import standardEventTypes along with other types
+import { Advisor, LoggedEvent, StandardEventType, standardEventTypes } from '@/types';
 import { PolicyDataMap } from '@/components/policy-search';
 
 // --- Constants for Firestore Collection Names ---
@@ -160,6 +161,7 @@ export default function Home() {
 
   const handleEditEvent = useCallback((event: LoggedEvent) => {
     // Type assertion/check: Ensure eventType is StandardEventType or handle appropriately
+    // Now standardEventTypes is defined and can be used
     if (typeof event.eventType !== 'string' || !standardEventTypes.includes(event.eventType as StandardEventType)) {
         console.warn(`Attempting to edit event with non-standard type: ${event.eventType}. Treating as 'Other'.`);
         // Optionally modify the event object before setting state, or handle in TimeLogForm
@@ -170,7 +172,7 @@ export default function Home() {
     }
     setActiveTab('time-log'); // Switch to the time log tab to show the form
     // Optionally scroll form into view
-    // document.getElementById('time-log-form-card')?.scrollIntoView({ behavior: 'smooth' });
+    document.getElementById('time-log-form-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, []);
 
   const handleCancelEdit = useCallback(() => {
@@ -423,20 +425,9 @@ export default function Home() {
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
              <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-4">
                  <header className="flex justify-center items-center relative mb-8 pb-4 border-b w-full max-w-4xl">
-                    {/* Logo */}
-                    <div className="w-48 h-16 relative" data-ai-hint="logo company">
-                         <Image
-                            // src="/Tempo_logo_transparent.png" // Assuming it's in /public
-                            src="https://picsum.photos/192/64" // Placeholder if logo is not in /public
-                            alt="Tempo Logo"
-                            fill // Use fill and let the parent div control size
-                            style={{ objectFit: 'contain' }} // Ensures the logo fits without distortion
-                            priority // Prioritize loading the logo
-                            // Remove width/height when using fill
-                            // width={192}
-                            // height={64}
-                         />
-                    </div>
+                    {/* Logo using Designer Font */}
+                    <div className="font-designer text-6xl font-bold text-primary tracking-tight">Tempo</div>
+
                     <div className="absolute right-0 top-1/2 transform -translate-y-1/2">
                         <ThemeToggle />
                     </div>
@@ -459,23 +450,16 @@ export default function Home() {
        <div className="container mx-auto p-4 md:p-8">
 
          <header className="flex justify-center items-center relative mb-8 pb-4 border-b">
-             <div className="w-48 h-16 relative" data-ai-hint="logo company">
-                <Image
-                    // src="/Tempo_logo_transparent.png" // Assuming it's in /public
-                    src="https://picsum.photos/192/64" // Placeholder if logo is not in /public
-                    alt="Tempo Logo"
-                    fill
-                    style={{ objectFit: 'contain' }}
-                    priority
-                 />
-            </div>
-            <div className="absolute right-0 top-1/2 transform -translate-y-1/2 flex items-center space-x-2">
-                {user.email && <span className="text-sm text-muted-foreground hidden md:inline">{user.email}</span>}
-                <ThemeToggle />
-                <Button variant="outline" size="icon" onClick={handleLogout} title="Logout">
-                    <LogOut className="h-5 w-5" />
-                </Button>
-            </div>
+             {/* Logo using Designer Font */}
+             <div className="font-designer text-6xl font-bold text-primary tracking-tight">Tempo</div>
+
+             <div className="absolute right-0 top-1/2 transform -translate-y-1/2 flex items-center space-x-2">
+                 {user.email && <span className="text-sm text-muted-foreground hidden md:inline">{user.email}</span>}
+                 <ThemeToggle />
+                 <Button variant="outline" size="icon" onClick={handleLogout} title="Logout">
+                     <LogOut className="h-5 w-5" />
+                 </Button>
+             </div>
          </header>
 
          {isLoadingData ? (
@@ -485,12 +469,13 @@ export default function Home() {
             </div>
          ) : (
              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                 <TabsList className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:flex lg:flex-wrap h-auto justify-center gap-2 mb-8 p-1">
+                 {/* Adjusted TabsList for better wrapping */}
+                 <TabsList className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:flex lg:flex-wrap justify-center gap-2 mb-8 p-1 h-auto">
                      <TabsTrigger value="time-log" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
-                     <Clock className="mr-2 h-4 w-4" /> Time Log
+                         <Clock className="mr-2 h-4 w-4" /> Time Log
                      </TabsTrigger>
                      <TabsTrigger value="summary" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
-                     <Calendar className="mr-2 h-4 w-4" /> Summary
+                         <Calendar className="mr-2 h-4 w-4" /> Summary
                      </TabsTrigger>
                      <TabsTrigger value="reports" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
                          <AreaChart className="mr-2 h-4 w-4" /> Reports
@@ -505,7 +490,7 @@ export default function Home() {
                          <FileCheck2 className="mr-2 h-4 w-4" /> Next Cleared Batch
                      </TabsTrigger>
                      <TabsTrigger value="manage-advisors" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
-                     <Users className="mr-2 h-4 w-4" /> Manage Advisors
+                         <Users className="mr-2 h-4 w-4" /> Manage Advisors
                      </TabsTrigger>
                  </TabsList>
 
