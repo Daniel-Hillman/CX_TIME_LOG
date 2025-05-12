@@ -23,6 +23,7 @@ type PolicyInfo = {
   potentialCancellationDate?: string;
   currentGrossPremiumPerFrequency?: string;
   maxNextPremiumCollectionDate?: string;
+  startingDate?: string; // Add Starting Date field
   [key: string]: any; // Allows for any other fields from the CSV
 };
 
@@ -35,6 +36,7 @@ const MISSED_PAYMENT_3_COL = 'Due Date of 3rd Arrear';
 const CANCELLATION_REASON_COL = 'Cancellation Reason';
 const CURRENT_GROSS_PREMIUM_COL = 'Current Gross Premium Per Frequency';
 const NEXT_PREMIUM_DATE_COL = 'Max. Next Premium Collection Date';
+const STARTING_DATE_COL = 'Starting Date'; // Constant for Starting Date
 
 // --- Unwanted Header Constants for Filtering Output ---
 const UNWANTED_HEADERS = [
@@ -266,6 +268,7 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
                 cancellationReason: row[CANCELLATION_REASON_COL]?.trim(),
                 currentGrossPremiumPerFrequency: row[CURRENT_GROSS_PREMIUM_COL]?.trim(),
                 maxNextPremiumCollectionDate: row[NEXT_PREMIUM_DATE_COL]?.trim()?.split(' ')[0],
+                startingDate: row[STARTING_DATE_COL]?.trim()?.split(' ')[0], // Extract Starting Date
               };
 
               // Dynamically add all other headers from the CSV to the policy object
@@ -498,29 +501,27 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
                   </AccordionTrigger>
                   <AccordionContent className="pt-2 pb-3 px-3 text-sm text-foreground">
                     <div className="space-y-1 pl-2 border-l-2 border-muted dark:border-muted-foreground/30 ml-2">
+                      {/* Status */}
                       <p>
                         <strong>Status:</strong> <span className="font-medium">{policy.status.replace(/_/g, ' ').toUpperCase()}</span>
                       </p>
+                      {/* Missed Payments */}
                       <p>
                         <strong>Missed Payments:</strong>
                         {policy.missedPayments.length > 0 ? policy.missedPayments.join(', ') : 'None'}
                       </p>
+                      {/* Next Premium Collection */}
                       {policy.maxNextPremiumCollectionDate && (
                         <p>
                           <strong>Next Premium Collection:</strong> {policy.maxNextPremiumCollectionDate}
                         </p>
                       )}
-                       {/* Dynamically display other relevant headers, EXCLUDING unwanted ones */}
-                       {dashboardHeaders
-                            .filter(h => ![POLICY_NUMBER_COL, STATUS_COL, MISSED_PAYMENT_1_COL, MISSED_PAYMENT_2_COL, MISSED_PAYMENT_3_COL, NEXT_PREMIUM_DATE_COL].includes(h) && // Avoid duplicates
-                                           !UNWANTED_HEADERS.includes(h) && // Exclude unwanted headers
-                                           policy[h] !== undefined && policy[h] !== '') // Check if value exists
-                            .slice(0, 5) // Limit displayed extra fields for brevity
-                            .map(header => (
-                                <p key={header}>
-                                    <strong className="capitalize">{header.replace(/_/g, ' ')}:</strong> {policy[header]}
-                                </p>
-                            ))}
+                      {/* Starting Date */}
+                       {policy.startingDate && (
+                        <p>
+                            <strong>Starting Date:</strong> {policy.startingDate}
+                        </p>
+                       )}
                     </div>
                   </AccordionContent>
                 </AccordionItem>
@@ -534,5 +535,3 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
 };
 
 export default NextClearedBatch;
-
-    
