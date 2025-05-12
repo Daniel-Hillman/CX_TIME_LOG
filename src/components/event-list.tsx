@@ -2,7 +2,7 @@
 'use client';
 
 // Removed Task from import
-import type { LoggedEvent, Advisor } from '@/types';
+import type { LoggedEvent, Advisor, StandardEventType } from '@/types'; // Import StandardEventType
 import * as React from 'react';
 import { useState, useMemo } from 'react';
 // Add getTodayDate function
@@ -49,6 +49,7 @@ interface EventListProps {
   // Removed tasks prop
   // tasks: Task[];
   onDeleteEvent: (eventId: string) => Promise<void>;
+  // Ensure onEditEvent expects a LoggedEvent
   onEditEvent: (event: LoggedEvent) => void;
   deletingId: string | null;
 }
@@ -98,7 +99,8 @@ export function EventList({
         if (dateRange?.from) {
             filtered = filtered.filter(event => {
                 try {
-                    const eventDate = parseISO(event.date);
+                    // Ensure event.date is treated as a string before parsing
+                    const eventDate = parseISO(String(event.date));
                     // Use startOfDay for accurate comparison with date picker
                     const start = startOfDay(dateRange.from!);
                     const end = dateRange.to ? startOfDay(dateRange.to) : startOfDay(dateRange.from!);
@@ -146,8 +148,9 @@ export function EventList({
             // Removed 'task' case
             switch (sortCriteria) {
                 case 'date':
-                    const dateA = parseISO(a.date || '').getTime();
-                    const dateB = parseISO(b.date || '').getTime();
+                    // Ensure dates are treated as strings before parsing
+                    const dateA = parseISO(String(a.date || '')).getTime();
+                    const dateB = parseISO(String(b.date || '')).getTime();
                     comparison = compareAsc(isNaN(dateA) ? 0 : dateA, isNaN(dateB) ? 0 : dateB);
                     break;
                 case 'advisor':
@@ -157,7 +160,7 @@ export function EventList({
                     break;
                 // Removed 'task' sort case
                 case 'eventType':
-                    comparison = (a.eventType || '').localeCompare(b.eventType || '');
+                    comparison = String(a.eventType || '').localeCompare(String(b.eventType || ''));
                     break;
                 case 'loggedTime':
                     comparison = (a.loggedTime || 0) - (b.loggedTime || 0);
@@ -185,12 +188,14 @@ export function EventList({
     const displayTitle = getEventDisplayTitle(event);
     try {
         await onDeleteEvent(event.id);
-        toast({ title: "Success", description: `Event "${displayTitle}" deleted.` });
+        // Toast is handled in the parent component now
+        // toast({ title: "Success", description: `Event "${displayTitle}" deleted.` });
     } catch (error) { console.error("Error calling onDeleteEvent from EventList:", error); }
   }
 
   const handleEdit = (event: LoggedEvent) => {
       if (deletingId) return;
+      // Pass the full event object to the parent handler
       onEditEvent(event);
   }
 
@@ -306,7 +311,7 @@ export function EventList({
                 {sortedEvents.length === 0 ? (
                     <TableRow>
                     {/* Updated colSpan */}
-                    <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
                         {showOnlyToday
                             ? 'No events logged today yet.'
                             : (regularFiltersActive ? 'No events found for the selected filters.' : 'No events logged yet.')
@@ -321,7 +326,8 @@ export function EventList({
 
                         return (
                         <TableRow key={event.id} className={cn(isDeletingThis && "opacity-50")}>
-                            <TableCell> {event.date ? format(parseISO(event.date), 'MMM dd, yyyy') : 'Invalid Date'} </TableCell>
+                            {/* Ensure date is formatted correctly */}
+                            <TableCell> {event.date ? format(parseISO(String(event.date)), 'MMM dd, yyyy') : 'Invalid Date'} </TableCell>
                             <TableCell>{advisorMap[event.advisorId] || 'Unknown Advisor'}</TableCell>
                             {/* Removed Task Cell */}
                             <TableCell>
@@ -334,11 +340,11 @@ export function EventList({
                             </TableCell>
                             <TableCell className="text-right">{event.loggedTime || 0} min</TableCell>
                             <TableCell className="text-right space-x-1">
-                                {/* Action buttons remain the same */}
-                                <Button variant="ghost" size="icon" className="text-primary hover:bg-primary/10" onClick={() => handleEdit(event)} disabled={!!deletingId} aria-label="Edit Event"> <Pencil className="h-4 w-4" /> </Button>
+                                {/* Action buttons */}
+                                <Button variant="ghost" size="icon" className="text-primary hover:bg-primary/10 h-8 w-8" onClick={() => handleEdit(event)} disabled={!!deletingId} aria-label="Edit Event"> <Pencil className="h-4 w-4" /> </Button>
                                 <AlertDialog>
                                     <AlertDialogTrigger asChild>
-                                        <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10" disabled={!!deletingId} aria-label="Delete Event">
+                                        <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 h-8 w-8" disabled={!!deletingId} aria-label="Delete Event">
                                             {isDeletingThis ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                                         </Button>
                                     </AlertDialogTrigger>

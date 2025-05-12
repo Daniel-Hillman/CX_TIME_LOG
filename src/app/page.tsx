@@ -41,10 +41,10 @@ import { SignUpForm } from '@/components/auth/signup-form';
 import { Button } from '@/components/ui/button';
 import { useToast } from "@/hooks/use-toast";
 import { Calendar, Clock, Users, AreaChart, FileSearch, FileCheck2, LogOut, Loader2 } from 'lucide-react'; // Added FileCheck2 & Loader2
-// import Image from 'next/image'; // Import NextImage - No longer needed
+import Image from 'next/image'; // Import NextImage
 
 // Types
-import { Advisor, LoggedEvent } from '@/types';
+import { Advisor, LoggedEvent, StandardEventType } from '@/types';
 import { PolicyDataMap } from '@/components/policy-search';
 
 // --- Constants for Firestore Collection Names ---
@@ -62,7 +62,11 @@ export default function Home() {
   const [advisors, setAdvisors] = useState<Advisor[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true); // Separate loading state for data
 
+  // UI State
   const [activeTab, setActiveTab] = useState('time-log');
+  const [eventToEdit, setEventToEdit] = useState<LoggedEvent | null>(null);
+  const [isProcessingForm, setIsProcessingForm] = useState<boolean>(false); // For TimeLogForm submission/update
+  const [deletingEventId, setDeletingEventId] = useState<string | null>(null); // For EventList delete button
 
   // Policy Search State (remains client-side)
   const [policyData, setPolicyData] = useState<PolicyDataMap>(new Map());
@@ -80,6 +84,7 @@ export default function Home() {
           setIsLoadingData(false);
           setAdvisors([]);
           setLoggedEvents([]);
+          setEventToEdit(null); // Clear edit state on logout
       }
       // Don't reset isLoadingData to true here, let the data fetching effect handle it
     });
@@ -115,7 +120,7 @@ export default function Home() {
     const unsubscribeEvents = onSnapshot(eventsQuery, (querySnapshot) => {
       const eventsData = querySnapshot.docs.map(doc => {
           const data = doc.data();
-          return {
+          const event = {
               id: doc.id,
               ...data,
               // Convert Firestore Timestamp to ISO String for components
@@ -123,6 +128,15 @@ export default function Home() {
               // Convert Firestore date string (YYYY-MM-DD) if needed, assume it's stored correctly
               date: data.date,
           } as LoggedEvent;
+
+           // Validate eventType before setting state
+           if (!event.eventType) {
+            console.warn(`Event with id ${event.id} has missing eventType. Setting to 'Other'.`);
+            event.eventType = 'Other'; // Assign a default or handle as needed
+          }
+          // Further type assertion if necessary, after validation/defaulting
+          return event as LoggedEvent & { eventType: StandardEventType };
+
       });
       setLoggedEvents(eventsData);
       setIsLoadingData(false); // Data is ready after events arrive
@@ -142,6 +156,45 @@ export default function Home() {
   }, [user, toast]); // Re-run when user changes
 
 
+  // --- Event Handlers ---
+
+  const handleEditEvent = useCallback((event: LoggedEvent) => {
+    // Type assertion/check: Ensure eventType is StandardEventType or handle appropriately
+    if (typeof event.eventType !== 'string' || !standardEventTypes.includes(event.eventType as StandardEventType)) {
+        console.warn(`Attempting to edit event with non-standard type: ${event.eventType}. Treating as 'Other'.`);
+        // Optionally modify the event object before setting state, or handle in TimeLogForm
+        // event.eventType = 'Other'; // Example: force to 'Other' if invalid
+        setEventToEdit({ ...event, eventType: 'Other' });
+    } else {
+         setEventToEdit(event as LoggedEvent & { eventType: StandardEventType }); // Assert type if valid
+    }
+    setActiveTab('time-log'); // Switch to the time log tab to show the form
+    // Optionally scroll form into view
+    // document.getElementById('time-log-form-card')?.scrollIntoView({ behavior: 'smooth' });
+  }, []);
+
+  const handleCancelEdit = useCallback(() => {
+    setEventToEdit(null);
+  }, []);
+
+  const handleDeleteEvent = useCallback(async (id: string) => {
+      if (!user) {
+          toast({ variant: "destructive", title: "Error", description: "You must be logged in." });
+          return;
+      }
+      setDeletingEventId(id);
+      try {
+          await deleteDoc(doc(db, EVENTS_COLLECTION, id));
+          toast({ title: "Success", description: "Log entry deleted." });
+      } catch (error) {
+          console.error("Error deleting log entry: ", error);
+          toast({ variant: "destructive", title: "Error", description: "Failed to delete log entry." });
+      } finally {
+          setDeletingEventId(null);
+      }
+  }, [user, toast]);
+
+
   // --- Firestore Data Modification Functions (Including userId) ---
 
   const addTimeLog = useCallback(async (eventData: Omit<LoggedEvent, 'id' | 'timestamp' | 'userId'>) => {
@@ -149,6 +202,7 @@ export default function Home() {
         toast({ variant: "destructive", title: "Error", description: "You must be logged in to add logs." });
         return;
     }
+    setIsProcessingForm(true); // Start loading
     try {
       const newEvent = {
         ...eventData,
@@ -161,8 +215,63 @@ export default function Home() {
     } catch (error) {
       console.error("Error adding time log: ", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to add time log entry." });
+    } finally {
+        setIsProcessingForm(false); // Stop loading
     }
   }, [user, toast]);
+
+  const editLogEntry = useCallback(async (updatedEvent: LoggedEvent) => {
+      if (!user) {
+          toast({ variant: "destructive", title: "Error", description: "You must be logged in." });
+          return;
+      }
+      if (!updatedEvent.id) {
+          toast({ variant: "destructive", title: "Error", description: "Cannot update event without an ID." });
+          return;
+      }
+      setIsProcessingForm(true); // Start loading
+      try {
+          const eventRef = doc(db, EVENTS_COLLECTION, updatedEvent.id);
+          // Prepare data, ensure userId isn't accidentally overwritten if included in updatedEvent
+          // Use Partial to only update fields present
+          const dataToUpdate: Partial<Omit<LoggedEvent, 'id'>> = {
+              advisorId: updatedEvent.advisorId,
+              date: updatedEvent.date,
+              eventType: updatedEvent.eventType,
+              eventDetails: updatedEvent.eventDetails,
+              loggedTime: updatedEvent.loggedTime,
+              // Convert timestamp back to Firestore Timestamp - ONLY if it changed significantly
+              // Assuming timestamp tracks the *last modified time*, so update it
+              timestamp: Timestamp.fromDate(new Date()),
+              // userId should generally not be changed
+          };
+
+           // Remove undefined fields to avoid overwriting with undefined in Firestore
+           // Type assertion needed here because TypeScript can't infer the keys perfectly
+          Object.keys(dataToUpdate).forEach(key => {
+              const typedKey = key as keyof typeof dataToUpdate;
+              if (dataToUpdate[typedKey] === undefined) {
+                  delete dataToUpdate[typedKey];
+              }
+          });
+
+          // Ensure eventDetails is explicitly set to null or removed if eventType is not 'Other'
+          if (dataToUpdate.eventType !== 'Other' && dataToUpdate.hasOwnProperty('eventDetails')) {
+              dataToUpdate.eventDetails = null; // Or use delete if Firestore handles field removal
+          }
+
+
+          await updateDoc(eventRef, dataToUpdate);
+          toast({ title: "Success", description: "Log entry updated." });
+          setEventToEdit(null); // Clear edit state on successful update
+      } catch (error) {
+          console.error("Error editing log entry: ", error);
+          toast({ variant: "destructive", title: "Error", description: "Failed to update log entry." });
+      } finally {
+          setIsProcessingForm(false); // Stop loading
+      }
+  }, [user, toast]);
+
 
   const addAdvisor = useCallback(async (name: string) => {
     if (!user) {
@@ -284,53 +393,6 @@ export default function Home() {
     }
   }, [loggedEvents, user, toast]);
 
-
-  const deleteLogEntry = useCallback(async (id: string) => {
-    if (!user) {
-        toast({ variant: "destructive", title: "Error", description: "You must be logged in." });
-        return;
-    }
-    try {
-        await deleteDoc(doc(db, EVENTS_COLLECTION, id));
-        toast({ title: "Success", description: "Log entry deleted." });
-    } catch (error) {
-        console.error("Error deleting log entry: ", error);
-        toast({ variant: "destructive", title: "Error", description: "Failed to delete log entry." });
-    }
-  }, [user, toast]);
-
-  const editLogEntry = useCallback(async (updatedEvent: LoggedEvent) => {
-    if (!user) {
-        toast({ variant: "destructive", title: "Error", description: "You must be logged in." });
-        return;
-    }
-    try {
-        const eventRef = doc(db, EVENTS_COLLECTION, updatedEvent.id);
-        // Prepare data, ensure userId isn't accidentally overwritten if included in updatedEvent
-        const dataToUpdate: Partial<Omit<LoggedEvent, 'id'>> = { // Use Partial to only update fields present
-            advisorId: updatedEvent.advisorId,
-            date: updatedEvent.date,
-            eventType: updatedEvent.eventType,
-            eventDetails: updatedEvent.eventDetails,
-            loggedTime: updatedEvent.loggedTime,
-            // Convert timestamp back to Firestore Timestamp
-            timestamp: Timestamp.fromDate(new Date(updatedEvent.timestamp)),
-            // userId should generally not be changed, but could be added if needed
-            // userId: updatedEvent.userId
-        };
-
-        // Remove undefined fields to avoid overwriting with undefined in Firestore
-        Object.keys(dataToUpdate).forEach(key => dataToUpdate[key as keyof typeof dataToUpdate] === undefined && delete dataToUpdate[key as keyof typeof dataToUpdate]);
-
-        await updateDoc(eventRef, dataToUpdate);
-        toast({ title: "Success", description: "Log entry updated." });
-    } catch (error) {
-        console.error("Error editing log entry: ", error);
-        toast({ variant: "destructive", title: "Error", description: "Failed to update log entry." });
-    }
-  }, [user, toast]);
-
-
   // --- Logout Handler ---
   const handleLogout = async () => {
     try {
@@ -361,9 +423,20 @@ export default function Home() {
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
              <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-4">
                  <header className="flex justify-center items-center relative mb-8 pb-4 border-b w-full max-w-4xl">
-                    <h1 className="font-designer text-4xl md:text-5xl text-primary">
-                       Tempo
-                    </h1>
+                    {/* Logo */}
+                    <div className="w-48 h-16 relative" data-ai-hint="logo company">
+                         <Image
+                            // src="/Tempo_logo_transparent.png" // Assuming it's in /public
+                            src="https://picsum.photos/192/64" // Placeholder if logo is not in /public
+                            alt="Tempo Logo"
+                            fill // Use fill and let the parent div control size
+                            style={{ objectFit: 'contain' }} // Ensures the logo fits without distortion
+                            priority // Prioritize loading the logo
+                            // Remove width/height when using fill
+                            // width={192}
+                            // height={64}
+                         />
+                    </div>
                     <div className="absolute right-0 top-1/2 transform -translate-y-1/2">
                         <ThemeToggle />
                     </div>
@@ -386,9 +459,16 @@ export default function Home() {
        <div className="container mx-auto p-4 md:p-8">
 
          <header className="flex justify-center items-center relative mb-8 pb-4 border-b">
-            <h1 className="font-designer text-4xl md:text-5xl text-primary">
-                Tempo
-            </h1>
+             <div className="w-48 h-16 relative" data-ai-hint="logo company">
+                <Image
+                    // src="/Tempo_logo_transparent.png" // Assuming it's in /public
+                    src="https://picsum.photos/192/64" // Placeholder if logo is not in /public
+                    alt="Tempo Logo"
+                    fill
+                    style={{ objectFit: 'contain' }}
+                    priority
+                 />
+            </div>
             <div className="absolute right-0 top-1/2 transform -translate-y-1/2 flex items-center space-x-2">
                 {user.email && <span className="text-sm text-muted-foreground hidden md:inline">{user.email}</span>}
                 <ThemeToggle />
@@ -435,25 +515,24 @@ export default function Home() {
                              <TimeLogForm
                                  advisors={advisors}
                                  onLogEvent={addTimeLog}
-                                 onUpdateEvent={(eventId, eventData) => { // Corrected onUpdateEvent signature
-                                    const eventToUpdate = loggedEvents.find(e => e.id === eventId);
-                                    if (eventToUpdate) {
-                                        const fullEventData = { ...eventToUpdate, ...eventData };
-                                        editLogEntry(fullEventData);
-                                    }
-                                 }}
-                                 onCancelEdit={() => { /* TODO */ }}
-                                 eventToEdit={null} /* TODO */
-                                 isSubmitting={false} /* TODO */
+                                 onUpdateEvent={(eventId, eventData) => {
+                                      // Ensure eventData includes the id for editLogEntry
+                                      const fullEventData = { ...eventData, id: eventId };
+                                      // Type assertion: Assume eventData has StandardEventType after form validation
+                                      editLogEntry(fullEventData as LoggedEvent & { eventType: StandardEventType });
+                                  }}
+                                 onCancelEdit={handleCancelEdit}
+                                 eventToEdit={eventToEdit}
+                                 isSubmitting={isProcessingForm}
                              />
                          </div>
                          <div className="lg:col-span-2">
                              <EventList
                                  events={loggedEvents}
                                  advisors={advisors}
-                                 onDeleteEvent={deleteLogEntry}
-                                 onEditEvent={(event) => { /* TODO */ }}
-                                 deletingId={null} /* TODO */
+                                 onDeleteEvent={handleDeleteEvent}
+                                 onEditEvent={handleEditEvent}
+                                 deletingId={deletingEventId}
                              />
                          </div>
                      </div>
@@ -503,5 +582,3 @@ export default function Home() {
     </ThemeProvider>
   );
 }
-
-    

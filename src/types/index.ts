@@ -28,6 +28,8 @@ export type Advisor = {
 // export type Task = { ... };
 
 // Represents a single logged event or time entry.
+// Note: eventType from Firestore might initially be 'string',
+// but should ideally conform to StandardEventType after validation/processing.
 export type LoggedEvent = {
   id: string; // Unique identifier for the event.
   userId: string; // Identifier of the user who logged the event.
@@ -35,9 +37,10 @@ export type LoggedEvent = {
   // Removed taskId field
   // taskId?: string | null;
   date: string; // Date of the event (ISO string format: YYYY-MM-DD).
-  eventType: StandardEventType | string; // Type of event, either predefined or custom.
+  eventType: StandardEventType | string; // Type of event, ideally predefined but allow string for flexibility from DB.
   eventDetails?: string | null; // Optional additional details about the event.
   loggedTime: number; // Time spent in minutes.
+  timestamp: string; // ISO string representation of the Firestore Timestamp (last modified/created)
 };
 
 

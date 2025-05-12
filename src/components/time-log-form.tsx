@@ -48,10 +48,12 @@ interface TimeLogFormProps {
   advisors: Advisor[];
   // Removed tasks prop
   // tasks: Task[];
-  onLogEvent: (event: Omit<LoggedEvent, 'userId' | 'id' | 'eventType' | 'taskId'> & { eventType: StandardEventType; /* taskId?: string */ }) => Promise<void>;
-  onUpdateEvent: (eventId: string, eventData: Omit<LoggedEvent, 'userId' | 'id' | 'eventType' | 'taskId'> & { eventType: StandardEventType; /* taskId?: string */ }) => Promise<void>;
+  // Ensure event data passed to callbacks matches the expected structure after form validation
+  onLogEvent: (event: Omit<LoggedEvent, 'userId' | 'id' | 'timestamp'>) => Promise<void>;
+  onUpdateEvent: (eventId: string, eventData: Omit<LoggedEvent, 'userId' | 'id' | 'timestamp'>) => Promise<void>;
   onCancelEdit: () => void;
-  eventToEdit?: Omit<LoggedEvent, 'eventType'> & { eventType: StandardEventType } | null;
+  // eventToEdit now might have a generic string for eventType initially, but form expects StandardEventType
+  eventToEdit?: LoggedEvent | null;
   isSubmitting: boolean;
 }
 
@@ -62,7 +64,7 @@ const initialDefaultValues: Omit<TimeLogFormData, 'date'> & { date: Date | undef
     date: undefined, // Will be set to new Date() later
     advisorId: '',
     // taskId: undefined, // Removed
-    eventType: standardEventTypes[0],
+    eventType: standardEventTypes[0], // Default to the first standard type
     eventDetails: '',
     loggedTime: 0,
 };
@@ -80,14 +82,25 @@ export function TimeLogForm({
   const isEditMode = !!eventToEdit;
 
   // *** Update defaultValues logic to remove taskId ***
+   // Function to safely get StandardEventType, defaulting to 'Other' if invalid
+   const getSafeEventType = (type: string | StandardEventType | undefined): StandardEventType => {
+     if (typeof type === 'string' && standardEventTypes.includes(type as StandardEventType)) {
+       return type as StandardEventType;
+     }
+     // Log warning if defaulting due to invalid type during edit
+     if (isEditMode && type && !standardEventTypes.includes(type as StandardEventType)) {
+        console.warn(`Invalid event type '${type}' provided for editing. Defaulting to 'Other'.`);
+     }
+     return 'Other'; // Default to 'Other'
+   };
+
   const form = useForm<TimeLogFormData>({
     resolver: zodResolver(formSchema),
     defaultValues: eventToEdit
       ? {
           date: parseISO(eventToEdit.date),
           advisorId: eventToEdit.advisorId,
-          // taskId: eventToEdit.taskId || undefined, // Removed
-          eventType: eventToEdit.eventType,
+          eventType: getSafeEventType(eventToEdit.eventType), // Use safe getter
           eventDetails: eventToEdit.eventDetails || '',
           loggedTime: eventToEdit.loggedTime,
         }
@@ -103,15 +116,14 @@ export function TimeLogForm({
       form.reset({
         date: parseISO(eventToEdit.date),
         advisorId: eventToEdit.advisorId,
-        // taskId: eventToEdit.taskId || undefined, // Removed
-        eventType: eventToEdit.eventType,
+        eventType: getSafeEventType(eventToEdit.eventType), // Use safe getter on reset
         eventDetails: eventToEdit.eventDetails || '',
         loggedTime: eventToEdit.loggedTime,
       });
     } else {
-       form.reset({ ...initialDefaultValues, date: new Date() }); // No longer resets taskId
+       form.reset({ ...initialDefaultValues, date: new Date() }); // Reset to initial defaults
     }
-  }, [eventToEdit, form]);
+  }, [eventToEdit, form]); // Removed getSafeEventType from deps as it's stable
 
    async function onSubmit(values: TimeLogFormData) {
     if (!(values.date instanceof Date) || isNaN(values.date.getTime())) {
@@ -120,31 +132,27 @@ export function TimeLogForm({
     }
 
     // *** Update eventData to remove taskId ***
-    const eventData: Omit<LoggedEvent, 'userId' | 'id' | 'eventType' | 'taskId'> & { eventType: StandardEventType; /* taskId?: string */ } = {
+    // Construct the event data based on the validated form values
+    const eventData: Omit<LoggedEvent, 'userId' | 'id' | 'timestamp'> = {
       date: format(values.date, 'yyyy-MM-dd'),
       advisorId: values.advisorId,
-      eventType: values.eventType,
-      // Removed taskId handling
-      // ...(values.taskId && { taskId: values.taskId }),
-      ...(values.eventType === 'Other' && values.eventDetails && typeof values.eventDetails === 'string' && { eventDetails: values.eventDetails.trim() }),
+      eventType: values.eventType, // This is guaranteed to be StandardEventType by the form schema
+      eventDetails: values.eventType === 'Other' ? (values.eventDetails || '').trim() : null, // Set details or null
       loggedTime: values.loggedTime,
     };
 
-    if (values.eventType !== 'Other') {
-        delete (eventData as Partial<typeof eventData>).eventDetails;
-    }
-
-    // No need to explicitly delete taskId
+    // No need to explicitly delete properties, schema ensures correct types
 
     try {
       if (isEditMode && eventToEdit) {
+        // Pass eventToEdit.id and the validated eventData
         await onUpdateEvent(eventToEdit.id, eventData);
          toast({ title: "Success", description: "Event updated successfully." });
-          onCancelEdit();
+          // onCancelEdit(); // Let the parent component handle clearing the edit state
       } else {
         await onLogEvent(eventData);
          toast({ title: "Success", description: "Time logged successfully." });
-         form.reset({ ...initialDefaultValues, date: new Date() }); // No longer resets taskId
+         form.reset({ ...initialDefaultValues, date: new Date() }); // Reset form after successful add
       }
 
     } catch (error) {
@@ -160,7 +168,7 @@ export function TimeLogForm({
   }
 
   return (
-    <Card className="w-full shadow-lg mb-6">
+    <Card id="time-log-form-card" className="w-full shadow-lg mb-6">
       <CardHeader>
         <CardTitle className="text-xl font-semibold text-primary">
           {isEditMode ? 'Edit Time Entry' : 'Log New Time Entry'}
@@ -275,62 +283,101 @@ export function TimeLogForm({
                 {/* <FormField ... taskId ... /> */}
 
                 {/* Logged Time Field (Now in Row 2 if event type is not 'Other') */}
-                <FormField
-                  control={form.control}
-                  name="loggedTime"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Time Logged (minutes)</FormLabel>
-                       <Select
-                           onValueChange={(value) => {
-                               const parsedValue = parseInt(value, 10);
-                               field.onChange(isNaN(parsedValue) ? 0 : parsedValue);
-                           }}
-                           value={field.value ? field.value.toString() : ''}
-                           disabled={isSubmitting}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                               <Clock className="mr-2 h-4 w-4 text-muted-foreground" />
-                              <SelectValue placeholder="Select time duration" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="0" disabled={!isEditMode && field.value === 0}>Select time duration</SelectItem>
-                            {logTimeOptions.map((time) => (
-                              <SelectItem key={time} value={time.toString()}>
-                                {time} min
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                 {watchedEventType !== 'Other' && (
+                     <FormField
+                       control={form.control}
+                       name="loggedTime"
+                       render={({ field }) => (
+                         <FormItem>
+                           <FormLabel>Time Logged (minutes)</FormLabel>
+                            <Select
+                                onValueChange={(value) => {
+                                    const parsedValue = parseInt(value, 10);
+                                    field.onChange(isNaN(parsedValue) ? 0 : parsedValue);
+                                }}
+                                value={field.value ? field.value.toString() : ''}
+                                disabled={isSubmitting}
+                             >
+                               <FormControl>
+                                 <SelectTrigger>
+                                    <Clock className="mr-2 h-4 w-4 text-muted-foreground" />
+                                   <SelectValue placeholder="Select time duration" />
+                                 </SelectTrigger>
+                               </FormControl>
+                               <SelectContent>
+                                 <SelectItem value="0" disabled={!isEditMode && field.value === 0}>Select time duration</SelectItem>
+                                 {logTimeOptions.map((time) => (
+                                   <SelectItem key={time} value={time.toString()}>
+                                     {time} min
+                                   </SelectItem>
+                                 ))}
+                               </SelectContent>
+                             </Select>
+                           <FormMessage />
+                         </FormItem>
+                       )}
+                     />
+                 )}
              </div>
 
-            {/* Conditional Event Details (Row 3, only if Event Type is Other) */}
-            {watchedEventType === 'Other' && (
-                <FormField
-                    control={form.control}
-                    name="eventDetails"
-                    render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>Details for &quot;Other&quot;</FormLabel>
-                        <FormControl>
-                        <Textarea
-                            placeholder="Please specify the details for the 'Other' event..."
-                            {...field}
-                            value={field.value || ''}
-                            disabled={isSubmitting}
-                            rows={3}
-                        />
-                        </FormControl>
-                        <FormMessage />
-                    </FormItem>
-                    )}
-                />
+             {/* Event Details and Logged Time (Row 3, only if Event Type is Other) */}
+             {watchedEventType === 'Other' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Event Details Field */}
+                    <FormField
+                        control={form.control}
+                        name="eventDetails"
+                        render={({ field }) => (
+                        <FormItem className="md:col-span-1">
+                            <FormLabel>Details for &quot;Other&quot;</FormLabel>
+                            <FormControl>
+                            <Textarea
+                                placeholder="Please specify the details for the 'Other' event..."
+                                {...field}
+                                value={field.value || ''}
+                                disabled={isSubmitting}
+                                rows={3}
+                            />
+                            </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                        )}
+                    />
+                    {/* Logged Time Field (for 'Other') */}
+                     <FormField
+                       control={form.control}
+                       name="loggedTime"
+                       render={({ field }) => (
+                         <FormItem className="md:col-span-1">
+                           <FormLabel>Time Logged (minutes)</FormLabel>
+                            <Select
+                                onValueChange={(value) => {
+                                    const parsedValue = parseInt(value, 10);
+                                    field.onChange(isNaN(parsedValue) ? 0 : parsedValue);
+                                }}
+                                value={field.value ? field.value.toString() : ''}
+                                disabled={isSubmitting}
+                             >
+                               <FormControl>
+                                 <SelectTrigger>
+                                    <Clock className="mr-2 h-4 w-4 text-muted-foreground" />
+                                   <SelectValue placeholder="Select time duration" />
+                                 </SelectTrigger>
+                               </FormControl>
+                               <SelectContent>
+                                 <SelectItem value="0" disabled={!isEditMode && field.value === 0}>Select time duration</SelectItem>
+                                 {logTimeOptions.map((time) => (
+                                   <SelectItem key={time} value={time.toString()}>
+                                     {time} min
+                                   </SelectItem>
+                                 ))}
+                               </SelectContent>
+                             </Select>
+                           <FormMessage />
+                         </FormItem>
+                       )}
+                     />
+                </div>
             )}
 
 
@@ -344,7 +391,8 @@ export function TimeLogForm({
               <Button
                   type="submit"
                   className={cn("bg-accent text-accent-foreground hover:bg-accent/90", isEditMode ? "" : "w-full")}
-                  disabled={advisors.length === 0 || isSubmitting}
+                  // Disable if no advisors and not in edit mode, or if submitting
+                  disabled={(advisors.length === 0 && !isEditMode) || isSubmitting}
                >
                  {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (isEditMode ? <Save className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />)}
                  {isSubmitting ? (isEditMode ? 'Saving...' : 'Logging...') : (isEditMode ? 'Save Changes' : 'Log Time')}
