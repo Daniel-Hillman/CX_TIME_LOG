@@ -23,7 +23,7 @@ type PolicyInfo = {
   potentialCancellationDate?: string;
   currentGrossPremiumPerFrequency?: string;
   maxNextPremiumCollectionDate?: string;
-  [key: string]: any;
+  [key: string]: any; // Allows for any other fields from the CSV
 };
 
 // --- CSV Column Header Constants ---
@@ -35,6 +35,14 @@ const MISSED_PAYMENT_3_COL = 'Due Date of 3rd Arrear';
 const CANCELLATION_REASON_COL = 'Cancellation Reason';
 const CURRENT_GROSS_PREMIUM_COL = 'Current Gross Premium Per Frequency';
 const NEXT_PREMIUM_DATE_COL = 'Max. Next Premium Collection Date';
+
+// --- Unwanted Header Constants for Filtering Output ---
+const UNWANTED_HEADERS = [
+    'Distribution Partner',
+    'Product Name',
+    'Sales Channel',
+    'Sold Date'
+];
 
 // --- Helper Functions ---
 
@@ -260,6 +268,7 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
                 maxNextPremiumCollectionDate: row[NEXT_PREMIUM_DATE_COL]?.trim()?.split(' ')[0],
               };
 
+              // Dynamically add all other headers from the CSV to the policy object
               actualHeaders.forEach(header => {
                 if (!policyEntry.hasOwnProperty(header) && row[header] !== undefined) {
                     policyEntry[header] = String(row[header]);
@@ -307,15 +316,18 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
     data.forEach((policy, index) => {
       report += `Policy #${index + 1}\n`;
       report += `-------------------------------------\n`;
-      headersToInclude.forEach(header => {
-        // Handle array missedPayments specifically for text report
-        if (header === 'missedPayments') {
-             report += `Missed Payments: ${policy.missedPayments.length > 0 ? policy.missedPayments.join(', ') : 'None'}\n`;
-        } else {
-            const value = policy[header] ?? 'N/A';
-            report += `${header}: ${value}\n`;
-        }
-      });
+       // Filter headers before iterating for the report
+       headersToInclude
+        .filter(header => !UNWANTED_HEADERS.includes(header)) // Exclude unwanted headers
+        .forEach(header => {
+            // Handle array missedPayments specifically for text report
+            if (header === 'missedPayments') {
+                report += `Missed Payments: ${policy.missedPayments.length > 0 ? policy.missedPayments.join(', ') : 'None'}\n`;
+            } else {
+                const value = policy[header] ?? 'N/A';
+                report += `${header}: ${value}\n`;
+            }
+       });
       report += "\n";
     });
     return report;
@@ -327,20 +339,25 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
       return;
     }
 
-    // Ensure headers are based on the actual data present in processedData, including dynamic ones
-    const headers = dashboardHeaders.length > 0 ? dashboardHeaders : (processedData.length > 0 ? Object.keys(processedData[0]) : []);
+    // Determine headers for the CSV based on the original file
+    const csvHeaders = dashboardHeaders.length > 0 ? dashboardHeaders : (processedData.length > 0 ? Object.keys(processedData[0]) : []);
+
     let fileContent: string;
     let mimeType: string;
     let fileName: string;
 
-    // Define specific headers for the TXT/PDF report
+    // Define specific headers for the TXT/PDF report, EXCLUDING unwanted ones
     const textReportHeaders = [
       POLICY_NUMBER_COL,
       STATUS_COL,
       'missedPayments', // Use the key name for the array
       NEXT_PREMIUM_DATE_COL,
-       CURRENT_GROSS_PREMIUM_COL // Add other relevant headers if needed
-    ];
+      CURRENT_GROSS_PREMIUM_COL,
+      // Add any other relevant headers *except* those in UNWANTED_HEADERS
+      // For example, if 'Policy Type' was relevant, add it here.
+      // We don't need to explicitly add all here, just the core ones.
+      // The generateTextReport function will use this list.
+    ].filter(header => !UNWANTED_HEADERS.includes(header)); // Ensure unwanted are filtered out here too
 
     switch (format) {
       case 'txt':
@@ -351,10 +368,11 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
         break;
       case 'csv':
       default:
+        // CSV will contain all original headers from the input file
         fileContent = Papa.unparse({
-            fields: headers,
+            fields: csvHeaders, // Use all original headers
             data: processedData.map(policy => {
-                return headers.map(header => {
+                return csvHeaders.map(header => {
                      // Join array fields for CSV, leave others as is
                     const value = policy[header];
                     return Array.isArray(value) ? value.join('; ') : (value ?? '');
@@ -454,11 +472,9 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
                 <AccordionItem
                   value={policy.policyNumber}
                   key={policy.policyNumber}
-                  // Removed background/border styling to rely on theme
                   className="border-b rounded-md mb-2"
                 >
                   <AccordionTrigger
-                    // Removed text color styling to rely on theme
                     className="font-semibold hover:no-underline px-3 py-3 text-sm"
                   >
                     <div className="flex items-center justify-between w-full">
@@ -494,12 +510,17 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
                           <strong>Next Premium Collection:</strong> {policy.maxNextPremiumCollectionDate}
                         </p>
                       )}
-                      {/* Dynamically display other headers, focusing on commonly checked ones */}
-                      {dashboardHeaders.filter(h => ![POLICY_NUMBER_COL, STATUS_COL, MISSED_PAYMENT_1_COL, MISSED_PAYMENT_2_COL, MISSED_PAYMENT_3_COL, NEXT_PREMIUM_DATE_COL].includes(h) && policy[h] !== undefined && policy[h] !== '').slice(0, 5).map(header => ( // Limit displayed extra fields
-                        <p key={header}>
-                            <strong className="capitalize">{header.replace(/_/g, ' ')}:</strong> {policy[header]}
-                        </p>
-                      ))}
+                       {/* Dynamically display other relevant headers, EXCLUDING unwanted ones */}
+                       {dashboardHeaders
+                            .filter(h => ![POLICY_NUMBER_COL, STATUS_COL, MISSED_PAYMENT_1_COL, MISSED_PAYMENT_2_COL, MISSED_PAYMENT_3_COL, NEXT_PREMIUM_DATE_COL].includes(h) && // Avoid duplicates
+                                           !UNWANTED_HEADERS.includes(h) && // Exclude unwanted headers
+                                           policy[h] !== undefined && policy[h] !== '') // Check if value exists
+                            .slice(0, 5) // Limit displayed extra fields for brevity
+                            .map(header => (
+                                <p key={header}>
+                                    <strong className="capitalize">{header.replace(/_/g, ' ')}:</strong> {policy[header]}
+                                </p>
+                            ))}
                     </div>
                   </AccordionContent>
                 </AccordionItem>
@@ -513,3 +534,5 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
 };
 
 export default NextClearedBatch;
+
+    
