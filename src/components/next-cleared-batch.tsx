@@ -43,7 +43,21 @@ const UNWANTED_HEADERS = [
     'Distribution Partner',
     'Product Name',
     'Sales Channel',
-    'Sold Date'
+    'Broker ID', // Added Broker ID as per common CSV structures, can be adjusted
+    'Sold Date',
+    'Exit Date', // Commonly not needed for this report type
+    'Cancellation Type', // Often detailed by Cancellation Reason
+    'Policy Type', // Specific display logic might handle this if needed
+    'LOAP Consent',
+    'Premium Escalation Type',
+    'Benefit Escalation Type',
+    'Current Sum Sumassured', // Typically too detailed for summary
+    'Current Gross Premium Annualized', // Per Frequency is usually more direct
+    'Premium Frequency', // Implicit or can be part of premium string
+    'Blank', // Common name for empty/utility columns
+    'Number Of Paid Premiums',
+    'Number Of Unpaid Premiums',
+    'Value Of Premiums Collected',
 ];
 
 // --- Helper Functions ---
@@ -237,7 +251,6 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
           }
         });
       } else {
-        // Use correct regex to split by newline (\n) or carriage return + newline (\r\n)
         clearedPolicyNumbers = new Set(clearedBatchText.split(/\r?\n/).map(line => line.trim()).filter(line => line && line.length > 0));
       }
 
@@ -268,10 +281,9 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
                 cancellationReason: row[CANCELLATION_REASON_COL]?.trim(),
                 currentGrossPremiumPerFrequency: row[CURRENT_GROSS_PREMIUM_COL]?.trim(),
                 maxNextPremiumCollectionDate: row[NEXT_PREMIUM_DATE_COL]?.trim()?.split(' ')[0],
-                startingDate: row[STARTING_DATE_COL]?.trim()?.split(' ')[0], // Extract Starting Date
+                startingDate: row[STARTING_DATE_COL]?.trim()?.split(' ')[0],
               };
 
-              // Dynamically add all other headers from the CSV to the policy object
               actualHeaders.forEach(header => {
                 if (!policyEntry.hasOwnProperty(header) && row[header] !== undefined) {
                     policyEntry[header] = String(row[header]);
@@ -284,7 +296,6 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
             }
           });
 
-          // Sort policies numerically based on the number part of the policy number
           policies.sort((a, b) => {
             const numA = extractPolicyNumberNumeric(a.policyNumber);
             const numB = extractPolicyNumberNumeric(b.policyNumber);
@@ -319,16 +330,14 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
     data.forEach((policy, index) => {
       report += `Policy #${index + 1}\n`;
       report += `-------------------------------------\n`;
-       // Filter headers before iterating for the report
        headersToInclude
-        .filter(header => !UNWANTED_HEADERS.includes(header)) // Exclude unwanted headers
+        .filter(header => !UNWANTED_HEADERS.includes(header))
         .forEach(header => {
-            // Handle array missedPayments specifically for text report
             if (header === 'missedPayments') {
                 report += `Missed Payments: ${policy.missedPayments.length > 0 ? policy.missedPayments.join(', ') : 'None'}\n`;
             } else {
                 const value = policy[header] ?? 'N/A';
-                report += `${header}: ${value}\n`;
+                report += `${header.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}: ${value}\n`; // Format header for readability
             }
        });
       report += "\n";
@@ -342,49 +351,49 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
       return;
     }
 
-    // Determine headers for the CSV based on the original file
     const csvHeaders = dashboardHeaders.length > 0 ? dashboardHeaders : (processedData.length > 0 ? Object.keys(processedData[0]) : []);
-
     let fileContent: string;
     let mimeType: string;
     let fileName: string;
 
-    // Define specific headers for the TXT/PDF report, EXCLUDING unwanted ones
     const textReportHeaders = [
       POLICY_NUMBER_COL,
       STATUS_COL,
-      'missedPayments', // Use the key name for the array
+      'missedPayments',
       NEXT_PREMIUM_DATE_COL,
       CURRENT_GROSS_PREMIUM_COL,
-      // Add any other relevant headers *except* those in UNWANTED_HEADERS
-      // For example, if 'Policy Type' was relevant, add it here.
-      // We don't need to explicitly add all here, just the core ones.
-      // The generateTextReport function will use this list.
-    ].filter(header => !UNWANTED_HEADERS.includes(header)); // Ensure unwanted are filtered out here too
+      STARTING_DATE_COL,
+    ].filter(header => !UNWANTED_HEADERS.includes(header));
 
     switch (format) {
       case 'txt':
-      case 'pdf': // For now, PDF will be a text file
         fileContent = generateTextReport(processedData, textReportHeaders);
         mimeType = 'text/plain;charset=utf-8;';
-        fileName = `next_cleared_batch_results.${format}`;
+        fileName = `next_cleared_batch_report.txt`;
         break;
+      case 'pdf': // "PDF (Text)" button will now download a CSV for Sheets compatibility
       case 'csv':
-      default:
-        // CSV will contain all original headers from the input file
         fileContent = Papa.unparse({
-            fields: csvHeaders, // Use all original headers
+            fields: csvHeaders,
             data: processedData.map(policy => {
                 return csvHeaders.map(header => {
-                     // Join array fields for CSV, leave others as is
                     const value = policy[header];
                     return Array.isArray(value) ? value.join('; ') : (value ?? '');
                 });
             })
         });
         mimeType = 'text/csv;charset=utf-8;';
-        fileName = 'next_cleared_batch_results.csv';
+        if (format === 'pdf') {
+            // User clicked "PDF (Text)" button, give them a CSV that's good for Sheets.
+            fileName = 'next_cleared_batch_report_for_sheets.csv';
+        } else {
+            // User clicked "Download CSV" button.
+            fileName = 'next_cleared_batch_data.csv';
+        }
         break;
+      default:
+        toast({ title: "Error", description: "Invalid download format selected.", variant: "destructive" });
+        return;
     }
 
     const blob = new Blob([fileContent], { type: mimeType });
@@ -396,6 +405,16 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
     document.body.removeChild(link);
     toast({ title: "Download Started", description: `The results file (${fileName}) is being downloaded.` });
   }, [processedData, dashboardHeaders, toast]);
+
+  // Define which details to show in the accordion content, excluding UNWANTED_HEADERS
+  const accordionDisplayHeaders = [
+      STATUS_COL,
+      'missedPayments', // Handled specially
+      NEXT_PREMIUM_DATE_COL,
+      STARTING_DATE_COL,
+      // CURRENT_GROSS_PREMIUM_COL, // This is already shown in the trigger, not needed here again
+  ].filter(h => !UNWANTED_HEADERS.includes(h));
+
 
   return (
     <Card className="w-full max-w-2xl mx-auto">
@@ -484,6 +503,9 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
                         <div className="flex items-center min-w-0">
                             <CheckCircle className="mr-2 h-5 w-5 flex-shrink-0 text-green-600 dark:text-green-500" />
                             <span className="truncate">{policy.policyNumber}</span>
+                            {policy[CURRENT_GROSS_PREMIUM_COL] && (
+                                <span className="ml-2 text-xs text-muted-foreground">(£{policy[CURRENT_GROSS_PREMIUM_COL]})</span>
+                            )}
                         </div>
                         <Button
                             variant="ghost"
@@ -501,27 +523,31 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
                   </AccordionTrigger>
                   <AccordionContent className="pt-2 pb-3 px-3 text-sm text-foreground">
                     <div className="space-y-1 pl-2 border-l-2 border-muted dark:border-muted-foreground/30 ml-2">
-                      {/* Status */}
-                      <p>
-                        <strong>Status:</strong> <span className="font-medium">{policy.status.replace(/_/g, ' ').toUpperCase()}</span>
-                      </p>
-                      {/* Missed Payments */}
-                      <p>
-                        <strong>Missed Payments:</strong>
-                        {policy.missedPayments.length > 0 ? policy.missedPayments.join(', ') : 'None'}
-                      </p>
-                      {/* Next Premium Collection */}
-                      {policy.maxNextPremiumCollectionDate && (
-                        <p>
-                          <strong>Next Premium Collection:</strong> {policy.maxNextPremiumCollectionDate}
-                        </p>
-                      )}
-                      {/* Starting Date */}
-                       {policy.startingDate && (
-                        <p>
-                            <strong>Starting Date:</strong> {policy.startingDate}
-                        </p>
-                       )}
+                      {accordionDisplayHeaders.map(headerKey => {
+                        if (headerKey === 'missedPayments') {
+                          return (
+                            <p key={headerKey}>
+                              <strong>Missed Payments:</strong>
+                              {policy.missedPayments.length > 0 ? policy.missedPayments.join(', ') : 'None'}
+                            </p>
+                          );
+                        }
+                        // Format header names for display (e.g., maxNextPremiumCollectionDate -> Max Next Premium Collection Date)
+                        const displayName = headerKey
+                            .replace(/([A-Z])/g, ' $1') // Add space before uppercase letters
+                            .replace(/_/g, ' ') // Replace underscores with spaces
+                            .replace(/^./, str => str.toUpperCase()); // Capitalize first letter
+
+
+                        if (policy[headerKey] !== undefined && policy[headerKey] !== null && String(policy[headerKey]).trim() !== '') {
+                          return (
+                            <p key={headerKey}>
+                              <strong>{displayName}:</strong> {policy[headerKey]}
+                            </p>
+                          );
+                        }
+                        return null;
+                      })}
                     </div>
                   </AccordionContent>
                 </AccordionItem>
