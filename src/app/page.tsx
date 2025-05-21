@@ -131,8 +131,8 @@ export default function Home() {
           } as LoggedEvent;
 
            // Validate eventType before setting state
-           if (!event.eventType) {
-            console.warn(`Event with id ${event.id} has missing eventType. Setting to 'Other'.`);
+           if (!event.eventType || !standardEventTypes.includes(event.eventType as StandardEventType)) {
+            console.warn(`Event with id ${event.id} has invalid eventType: ${event.eventType}. Setting to 'Other'.`);
             event.eventType = 'Other'; // Assign a default or handle as needed
           }
           // Further type assertion if necessary, after validation/defaulting
@@ -161,11 +161,9 @@ export default function Home() {
 
   const handleEditEvent = useCallback((event: LoggedEvent) => {
     // Type assertion/check: Ensure eventType is StandardEventType or handle appropriately
-    // Now standardEventTypes is defined and can be used
+    // Now standardEventTypes is defined and can be used in this scope
     if (typeof event.eventType !== 'string' || !standardEventTypes.includes(event.eventType as StandardEventType)) {
         console.warn(`Attempting to edit event with non-standard type: ${event.eventType}. Treating as 'Other'.`);
-        // Optionally modify the event object before setting state, or handle in TimeLogForm
-        // event.eventType = 'Other'; // Example: force to 'Other' if invalid
         setEventToEdit({ ...event, eventType: 'Other' });
     } else {
          setEventToEdit(event as LoggedEvent & { eventType: StandardEventType }); // Assert type if valid
@@ -469,8 +467,8 @@ export default function Home() {
             </div>
          ) : (
              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                 {/* Adjusted TabsList for better wrapping */}
-                 <TabsList className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:flex lg:flex-wrap justify-center gap-2 mb-8 p-1 h-auto">
+                 {/* Adjusted TabsList for better wrapping and more bottom margin */}
+                 <TabsList className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:flex lg:flex-wrap justify-center gap-2 mb-12 p-1 h-auto">
                      <TabsTrigger value="time-log" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
                          <Clock className="mr-2 h-4 w-4" /> Time Log
                      </TabsTrigger>
