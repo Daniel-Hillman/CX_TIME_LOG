@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -35,16 +34,16 @@ import { TimeLogSummary } from '@/components/time-log-summary';
 import { ReportSection } from '@/components/report-section';
 import { VisualizationsSection } from '@/components/visualizations-section';
 import { PolicySearch } from '@/components/policy-search';
-import NextClearedBatch from '@/components/next-cleared-batch'; // <-- Import the new component
+import NextClearedBatch from '@/components/next-cleared-batch';
+import { WholeOfMarketSection } from '@/components/whole-of-market-section'; // Import new section
 import { LoginForm } from '@/components/auth/login-form';
 import { SignUpForm } from '@/components/auth/signup-form';
 import { Button } from '@/components/ui/button';
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, Clock, Users, AreaChart, FileSearch, FileCheck2, LogOut, Loader2 } from 'lucide-react'; // Added FileCheck2 & Loader2
-import Image from 'next/image'; // Import NextImage
+import { Calendar, Clock, Users, AreaChart, FileSearch, FileCheck2, LogOut, Loader2, Building2 } from 'lucide-react'; // Added Building2
+import Image from 'next/image';
 
 // Types
-// Import standardEventTypes along with other types
 import { Advisor, LoggedEvent, StandardEventType, standardEventTypes } from '@/types';
 import { PolicyDataMap } from '@/components/policy-search';
 
@@ -56,120 +55,99 @@ export default function Home() {
   const { toast } = useToast();
   const [user, setUser] = useState<User | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
-  const [showLogin, setShowLogin] = useState(true); // Toggle between Login and Sign Up
+  const [showLogin, setShowLogin] = useState(true);
 
-  // State for data (fetched from Firestore)
   const [loggedEvents, setLoggedEvents] = useState<LoggedEvent[]>([]);
   const [advisors, setAdvisors] = useState<Advisor[]>([]);
-  const [isLoadingData, setIsLoadingData] = useState(true); // Separate loading state for data
+  const [isLoadingData, setIsLoadingData] = useState(true);
 
-  // UI State
   const [activeTab, setActiveTab] = useState('time-log');
   const [eventToEdit, setEventToEdit] = useState<LoggedEvent | null>(null);
-  const [isProcessingForm, setIsProcessingForm] = useState<boolean>(false); // For TimeLogForm submission/update
-  const [deletingEventId, setDeletingEventId] = useState<string | null>(null); // For EventList delete button
+  const [isProcessingForm, setIsProcessingForm] = useState<boolean>(false);
+  const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
 
-  // Policy Search State (remains client-side)
   const [policyData, setPolicyData] = useState<PolicyDataMap>(new Map());
   const [policyFileName, setPolicyFileName] = useState<string | null>(null);
   const [isPolicyLoading, setIsPolicyLoading] = useState<boolean>(false);
   const [policyParseError, setPolicyParseError] = useState<string | null>(null);
 
-  // --- Authentication Effect ---
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setIsLoadingAuth(false);
       if (!currentUser) {
-          // If user logs out, immediately set data loading to false and clear data
           setIsLoadingData(false);
           setAdvisors([]);
           setLoggedEvents([]);
-          setEventToEdit(null); // Clear edit state on logout
+          setEventToEdit(null);
       }
-      // Don't reset isLoadingData to true here, let the data fetching effect handle it
     });
-    return () => unsubscribe(); // Cleanup on unmount
+    return () => unsubscribe();
   }, []);
 
-  // --- Firestore Data Fetching Effect ---
   useEffect(() => {
-    // Only run if a user is logged in
     if (!user) {
-      setIsLoadingData(false); // Ensure loading is false if no user
+      setIsLoadingData(false);
       return;
     }
 
     console.log("User logged in, fetching Firestore data...");
-    setIsLoadingData(true); // Start loading data
+    setIsLoadingData(true);
 
-    // Fetch Advisors
     const advisorsQuery = query(collection(db, ADVISORS_COLLECTION));
     const unsubscribeAdvisors = onSnapshot(advisorsQuery, (querySnapshot) => {
       const advisorsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Advisor));
       setAdvisors(advisorsData);
-      // Don't set loading false until both subscriptions are active and initial data is potentially received
       console.log("Advisors fetched: ", advisorsData.length);
     }, (error) => {
         console.error("Error fetching advisors: ", error);
         toast({ variant: "destructive", title: "Error", description: "Could not fetch advisors." });
-        setIsLoadingData(false); // Set loading false on error
+        setIsLoadingData(false);
     });
 
-    // Fetch Logged Events
     const eventsQuery = query(collection(db, EVENTS_COLLECTION));
     const unsubscribeEvents = onSnapshot(eventsQuery, (querySnapshot) => {
       const eventsData = querySnapshot.docs.map(doc => {
           const data = doc.data();
-          const event = {
+          const event: LoggedEvent = {
               id: doc.id,
               ...data,
-              // Convert Firestore Timestamp to ISO String for components
               timestamp: (data.timestamp as Timestamp)?.toDate().toISOString() ?? new Date().toISOString(),
-              // Convert Firestore date string (YYYY-MM-DD) if needed, assume it's stored correctly
               date: data.date,
-          } as LoggedEvent;
+          } as LoggedEvent; // Initial cast
 
            // Validate eventType before setting state
            if (!event.eventType || !standardEventTypes.includes(event.eventType as StandardEventType)) {
             console.warn(`Event with id ${event.id} has invalid eventType: ${event.eventType}. Setting to 'Other'.`);
-            event.eventType = 'Other'; // Assign a default or handle as needed
+            event.eventType = 'Other';
           }
-          // Further type assertion if necessary, after validation/defaulting
-          return event as LoggedEvent & { eventType: StandardEventType };
-
+          return event as LoggedEvent & { eventType: StandardEventType }; // Assert after validation
       });
       setLoggedEvents(eventsData);
-      setIsLoadingData(false); // Data is ready after events arrive
+      setIsLoadingData(false);
       console.log("Events fetched: ", eventsData.length);
     }, (error) => {
         console.error("Error fetching logged events: ", error);
         toast({ variant: "destructive", title: "Error", description: "Could not fetch time logs." });
-        setIsLoadingData(false); // Set loading false on error
+        setIsLoadingData(false);
     });
 
-    // Cleanup Firestore subscriptions
     return () => {
       console.log("Cleaning up Firestore listeners.");
       unsubscribeAdvisors();
       unsubscribeEvents();
     };
-  }, [user, toast]); // Re-run when user changes
+  }, [user, toast]);
 
-
-  // --- Event Handlers ---
 
   const handleEditEvent = useCallback((event: LoggedEvent) => {
-    // Type assertion/check: Ensure eventType is StandardEventType or handle appropriately
-    // Now standardEventTypes is defined and can be used in this scope
     if (typeof event.eventType !== 'string' || !standardEventTypes.includes(event.eventType as StandardEventType)) {
         console.warn(`Attempting to edit event with non-standard type: ${event.eventType}. Treating as 'Other'.`);
         setEventToEdit({ ...event, eventType: 'Other' });
     } else {
-         setEventToEdit(event as LoggedEvent & { eventType: StandardEventType }); // Assert type if valid
+         setEventToEdit(event as LoggedEvent & { eventType: StandardEventType });
     }
-    setActiveTab('time-log'); // Switch to the time log tab to show the form
-    // Optionally scroll form into view
+    setActiveTab('time-log');
     document.getElementById('time-log-form-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, []);
 
@@ -195,28 +173,25 @@ export default function Home() {
   }, [user, toast]);
 
 
-  // --- Firestore Data Modification Functions (Including userId) ---
-
   const addTimeLog = useCallback(async (eventData: Omit<LoggedEvent, 'id' | 'timestamp' | 'userId'>) => {
     if (!user) {
         toast({ variant: "destructive", title: "Error", description: "You must be logged in to add logs." });
         return;
     }
-    setIsProcessingForm(true); // Start loading
+    setIsProcessingForm(true);
     try {
       const newEvent = {
         ...eventData,
-        userId: user.uid, // Add the current user's ID
-        timestamp: Timestamp.fromDate(new Date()), // Use Firestore Timestamp
+        userId: user.uid,
+        timestamp: Timestamp.fromDate(new Date()),
       };
-      const docRef = await addDoc(collection(db, EVENTS_COLLECTION), newEvent);
-      console.log("Time log added with ID: ", docRef.id);
+      await addDoc(collection(db, EVENTS_COLLECTION), newEvent);
       toast({ title: "Success", description: "Time log entry added." });
     } catch (error) {
       console.error("Error adding time log: ", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to add time log entry." });
     } finally {
-        setIsProcessingForm(false); // Stop loading
+        setIsProcessingForm(false);
     }
   }, [user, toast]);
 
@@ -229,25 +204,18 @@ export default function Home() {
           toast({ variant: "destructive", title: "Error", description: "Cannot update event without an ID." });
           return;
       }
-      setIsProcessingForm(true); // Start loading
+      setIsProcessingForm(true);
       try {
           const eventRef = doc(db, EVENTS_COLLECTION, updatedEvent.id);
-          // Prepare data, ensure userId isn't accidentally overwritten if included in updatedEvent
-          // Use Partial to only update fields present
           const dataToUpdate: Partial<Omit<LoggedEvent, 'id'>> = {
               advisorId: updatedEvent.advisorId,
               date: updatedEvent.date,
               eventType: updatedEvent.eventType,
               eventDetails: updatedEvent.eventDetails,
               loggedTime: updatedEvent.loggedTime,
-              // Convert timestamp back to Firestore Timestamp - ONLY if it changed significantly
-              // Assuming timestamp tracks the *last modified time*, so update it
               timestamp: Timestamp.fromDate(new Date()),
-              // userId should generally not be changed
           };
 
-           // Remove undefined fields to avoid overwriting with undefined in Firestore
-           // Type assertion needed here because TypeScript can't infer the keys perfectly
           Object.keys(dataToUpdate).forEach(key => {
               const typedKey = key as keyof typeof dataToUpdate;
               if (dataToUpdate[typedKey] === undefined) {
@@ -255,20 +223,18 @@ export default function Home() {
               }
           });
 
-          // Ensure eventDetails is explicitly set to null or removed if eventType is not 'Other'
           if (dataToUpdate.eventType !== 'Other' && dataToUpdate.hasOwnProperty('eventDetails')) {
-              dataToUpdate.eventDetails = null; // Or use delete if Firestore handles field removal
+              dataToUpdate.eventDetails = null;
           }
-
 
           await updateDoc(eventRef, dataToUpdate);
           toast({ title: "Success", description: "Log entry updated." });
-          setEventToEdit(null); // Clear edit state on successful update
+          setEventToEdit(null);
       } catch (error) {
           console.error("Error editing log entry: ", error);
           toast({ variant: "destructive", title: "Error", description: "Failed to update log entry." });
       } finally {
-          setIsProcessingForm(false); // Stop loading
+          setIsProcessingForm(false);
       }
   }, [user, toast]);
 
@@ -288,12 +254,8 @@ export default function Home() {
       return;
     }
     try {
-        const newAdvisor = {
-            name: trimmedName,
-            userId: user.uid // Add the current user's ID
-        };
-        const docRef = await addDoc(collection(db, ADVISORS_COLLECTION), newAdvisor);
-        console.log("Advisor added with ID: ", docRef.id);
+        const newAdvisor = { name: trimmedName, userId: user.uid };
+        await addDoc(collection(db, ADVISORS_COLLECTION), newAdvisor);
         toast({ title: "Success", description: `Advisor '${trimmedName}' added.` });
     } catch (error) {
         console.error("Error adding advisor: ", error);
@@ -301,10 +263,7 @@ export default function Home() {
     }
   }, [advisors, user, toast]);
 
-  // --- Other Firestore Functions (removeAdvisor, editAdvisor, etc.) ---
-  // (Keep existing logic, ensuring user check is present)
-
-    const removeAdvisor = useCallback(async (id: string) => {
+  const removeAdvisor = useCallback(async (id: string) => {
     if (!user) {
       toast({ variant: "destructive", title: "Error", description: "You must be logged in to manage advisors." });
       return;
@@ -358,7 +317,6 @@ export default function Home() {
 
     try {
         const advisorRef = doc(db, ADVISORS_COLLECTION, id);
-        // Only update the name, leave userId untouched
         await updateDoc(advisorRef, { name: trimmedNewName });
         toast({ title: "Success", description: `Advisor '${originalAdvisor.name}' renamed to '${trimmedNewName}'.` });
     } catch (error) {
@@ -376,7 +334,6 @@ export default function Home() {
         toast({ variant: "default", title: "Info", description: "There are no time logs to clear." });
         return;
     }
-    // TODO: Implement confirmation dialog before proceeding
     console.warn(`User ${user.email} initiated Clear All Logs. Deleting ${loggedEvents.length} entries...`);
     try {
         const batch = writeBatch(db);
@@ -385,7 +342,6 @@ export default function Home() {
             batch.delete(eventRef);
         });
         await batch.commit();
-        console.log("Batch delete successful.");
         toast({ title: "Success", description: "All time log entries cleared." });
     } catch (error) {
         console.error("Error clearing all logs: ", error);
@@ -393,21 +349,16 @@ export default function Home() {
     }
   }, [loggedEvents, user, toast]);
 
-  // --- Logout Handler ---
   const handleLogout = async () => {
     try {
       await signOut(auth);
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
-      // No need to clear state here, useEffect[user] handles it.
     } catch (error) {
       console.error("Logout Error:", error);
       toast({ variant: "destructive", title: "Logout Failed", description: "An error occurred during logout." });
     }
   };
 
-  // --- Render Logic ---
-
-  // Initial Auth Loading Screen
   if (isLoadingAuth) {
     return (
         <div className="flex justify-center items-center min-h-screen">
@@ -417,15 +368,20 @@ export default function Home() {
     );
   }
 
-  // Logged Out View: Show Login/Sign Up forms
   if (!user) {
     return (
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
              <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-4">
                  <header className="flex justify-center items-center relative mb-8 pb-4 border-b w-full max-w-4xl">
-                    {/* Logo using Designer Font */}
-                    <div className="font-designer text-6xl font-bold text-primary tracking-tight">Tempo</div>
-
+                    <div className="w-48 h-16 relative">
+                       <Image
+                           src="/Tempo_logo_transparent.png" // Assuming it's in /public
+                           alt="Tempo Logo"
+                           fill
+                           style={{ objectFit: 'contain' }}
+                           priority
+                       />
+                    </div>
                     <div className="absolute right-0 top-1/2 transform -translate-y-1/2">
                         <ThemeToggle />
                     </div>
@@ -441,16 +397,21 @@ export default function Home() {
     );
   }
 
-  // Logged In View: Show main application
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
      <div className="min-h-screen bg-background text-foreground">
        <div className="container mx-auto p-4 md:p-8">
 
          <header className="flex justify-center items-center relative mb-8 pb-4 border-b">
-             {/* Logo using Designer Font */}
-             <div className="font-designer text-6xl font-bold text-primary tracking-tight">Tempo</div>
-
+             <div className="w-48 h-16 relative"> {/* Container for the logo */}
+                <Image
+                    src="/Tempo_logo_transparent.png" // Ensure this path is correct and the image is in /public
+                    alt="Tempo Logo"
+                    fill // Use fill and objectFit
+                    style={{ objectFit: 'contain' }} // Ensures the image scales within the container
+                    priority // Optional: if it's an LCP element
+                />
+            </div>
              <div className="absolute right-0 top-1/2 transform -translate-y-1/2 flex items-center space-x-2">
                  {user.email && <span className="text-sm text-muted-foreground hidden md:inline">{user.email}</span>}
                  <ThemeToggle />
@@ -467,7 +428,6 @@ export default function Home() {
             </div>
          ) : (
              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                 {/* Adjusted TabsList for better wrapping and more bottom margin */}
                  <TabsList className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:flex lg:flex-wrap justify-center gap-2 mb-12 p-1 h-auto">
                      <TabsTrigger value="time-log" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
                          <Clock className="mr-2 h-4 w-4" /> Time Log
@@ -487,6 +447,9 @@ export default function Home() {
                      <TabsTrigger value="next-cleared-batch" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
                          <FileCheck2 className="mr-2 h-4 w-4" /> Next Cleared Batch
                      </TabsTrigger>
+                     <TabsTrigger value="whole-of-market" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
+                         <Building2 className="mr-2 h-4 w-4" /> Whole Of Market
+                     </TabsTrigger>
                      <TabsTrigger value="manage-advisors" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
                          <Users className="mr-2 h-4 w-4" /> Manage Advisors
                      </TabsTrigger>
@@ -499,9 +462,7 @@ export default function Home() {
                                  advisors={advisors}
                                  onLogEvent={addTimeLog}
                                  onUpdateEvent={(eventId, eventData) => {
-                                      // Ensure eventData includes the id for editLogEntry
                                       const fullEventData = { ...eventData, id: eventId };
-                                      // Type assertion: Assume eventData has StandardEventType after form validation
                                       editLogEntry(fullEventData as LoggedEvent & { eventType: StandardEventType });
                                   }}
                                  onCancelEdit={handleCancelEdit}
@@ -550,6 +511,10 @@ export default function Home() {
                     <NextClearedBatch />
                 </TabsContent>
 
+                <TabsContent value="whole-of-market">
+                    <WholeOfMarketSection />
+                </TabsContent>
+
                  <TabsContent value="manage-advisors">
                      <AdvisorManager
                          advisors={advisors}
@@ -565,3 +530,5 @@ export default function Home() {
     </ThemeProvider>
   );
 }
+
+    
