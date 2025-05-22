@@ -4,13 +4,6 @@
 import *
 as React from 'react';
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import {
   // Table, // We will not use the main Table wrapper component
   TableBody,
   TableCell,
@@ -20,6 +13,8 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { cn } from "@/lib/utils"; // Import cn
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+
 
 interface InsurerInfoEntry {
   insurer: string;
@@ -286,10 +281,15 @@ export function WholeOfMarketSection() {
       <CardContent>
         {/* This div defines the height and enables scrolling for the Table */}
         <div className="h-[70vh] w-full overflow-auto border rounded-md">
+          {/*
+            We use a raw <table> element here instead of ShadCN's <Table>
+            to ensure that our sticky header and column work correctly within
+            this specific scrollable container.
+          */}
           <table className={cn("w-full caption-bottom text-sm")}>
             <TableHeader className="sticky top-0 bg-background z-10">
               <TableRow>
-                <TableHead className="min-w-[150px]">Insurer</TableHead>
+                <TableHead className="min-w-[150px] sticky left-0 bg-background z-20">Insurer</TableHead>
                 <TableHead className="min-w-[130px]">Contact Info</TableHead>
                 <TableHead className="min-w-[100px] text-center">Auto Recollect?</TableHead>
                 <TableHead className="min-w-[150px]">Lapse (Missed Pmts)</TableHead>
@@ -303,7 +303,7 @@ export function WholeOfMarketSection() {
             <TableBody>
               {insurerDataArray.map((insurer) => (
                 <TableRow key={insurer.insurer}>
-                  <TableCell className="font-medium">{insurer.insurer}</TableCell>
+                  <TableCell className="font-medium sticky left-0 bg-background z-5">{insurer.insurer}</TableCell>
                   <TableCell>{insurer.contactInformation || '-'}</TableCell>
                   <TableCell className="text-center">{renderBooleanBadge(insurer.autoRecollection)}</TableCell>
                   <TableCell>{insurer.missedPaymentsToLapse || '-'}</TableCell>
