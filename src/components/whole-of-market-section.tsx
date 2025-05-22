@@ -18,8 +18,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Badge } from '@/components/ui/badge'; // Added for boolean values
+// ScrollArea removed
+import { Badge } from '@/components/ui/badge'; 
 
 interface InsurerInfoEntry {
   insurer: string;
@@ -284,7 +284,8 @@ export function WholeOfMarketSection() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <ScrollArea className="h-[70vh] w-full">
+        {/* This div now defines the height and enables scrolling for the Table component */}
+        <div className="h-[70vh] w-full overflow-auto border rounded-md">
           <Table>
             <TableHeader className="sticky top-0 bg-background z-10">
               <TableRow>
@@ -317,7 +318,7 @@ export function WholeOfMarketSection() {
               ))}
             </TableBody>
           </Table>
-        </ScrollArea>
+        </div>
       </CardContent>
     </Card>
   );
