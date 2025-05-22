@@ -11,15 +11,15 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import {
-  Table,
+  // Table, // We will not use the main Table wrapper component
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-// ScrollArea removed
-import { Badge } from '@/components/ui/badge'; 
+import { Badge } from '@/components/ui/badge';
+import { cn } from "@/lib/utils"; // Import cn
 
 interface InsurerInfoEntry {
   insurer: string;
@@ -284,9 +284,9 @@ export function WholeOfMarketSection() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {/* This div now defines the height and enables scrolling for the Table component */}
+        {/* This div defines the height and enables scrolling for the Table */}
         <div className="h-[70vh] w-full overflow-auto border rounded-md">
-          <Table>
+          <table className={cn("w-full caption-bottom text-sm")}>
             <TableHeader className="sticky top-0 bg-background z-10">
               <TableRow>
                 <TableHead className="min-w-[150px]">Insurer</TableHead>
@@ -317,7 +317,7 @@ export function WholeOfMarketSection() {
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
+          </table>
         </div>
       </CardContent>
     </Card>
