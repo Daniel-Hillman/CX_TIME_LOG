@@ -4,7 +4,6 @@
 import *
 as React from 'react';
 import {
-  // Table, // We will not use the main Table wrapper component
   TableBody,
   TableCell,
   TableHead,
@@ -12,9 +11,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { cn } from "@/lib/utils"; // Import cn
+import { cn } from "@/lib/utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-
+import { Input } from '@/components/ui/input';
 
 interface InsurerInfoEntry {
   insurer: string;
@@ -28,7 +27,6 @@ interface InsurerInfoEntry {
   bankDetails?: string;
 }
 
-// Data extracted from the prompt
 const insurerDataArray: InsurerInfoEntry[] = [
   {
     insurer: "SOURCE HOME INSURANCE",
@@ -48,7 +46,12 @@ const insurerDataArray: InsurerInfoEntry[] = [
     missedPaymentsToLapse: "",
     cancelOnBehalf: "No",
     canReinstateDD: "Yes",
-    otherRetentionsInfo: "▪ NO PORTAL\n ▪ Clearance - 7 working days\n▪ 4+ missed payments = Declaration of Health required\n▪ Customer can send bank transfer to make up payment\n▪ Can set up double/triple collection on behalf of client\n▪ 'Refer to payer' - currently attempting recollection. ",
+    otherRetentionsInfo: `▪ NO PORTAL
+ ▪ Clearance - 7 working days
+▪ 4+ missed payments = Declaration of Health required
+▪ Customer can send bank transfer to make up payment
+▪ Can set up double/triple collection on behalf of client
+▪ 'Refer to payer' - currently attempting recollection. `,
     emailPassword: "UsL1PzrhI5-T",
     bankDetails: "",
   },
@@ -59,7 +62,10 @@ const insurerDataArray: InsurerInfoEntry[] = [
     missedPaymentsToLapse: "3",
     cancelOnBehalf: "Yes - via portal",
     canReinstateDD: "Yes",
-    otherRetentionsInfo: "▪ PORTAL\n ▪ Payment clearance - 4 working days\n▪ Portal - can reattempt 3-5 day collection on portal, can set up double collection, can change bank details & payment dates & reinstate policy if less than 3 payments missed.\n▪ AIG would have reattempted BEFORE sending notification to us",
+    otherRetentionsInfo: `▪ PORTAL
+ ▪ Payment clearance - 4 working days
+▪ Portal - can reattempt 3-5 day collection on portal, can set up double collection, can change bank details & payment dates & reinstate policy if less than 3 payments missed.
+▪ AIG would have reattempted BEFORE sending notification to us`,
     emailPassword: "",
     bankDetails: "",
   },
@@ -70,7 +76,12 @@ const insurerDataArray: InsurerInfoEntry[] = [
     missedPaymentsToLapse: "", // Lapses after - 60 days of 1st missed DD
     cancelOnBehalf: "Yes - via portal",
     canReinstateDD: "Yes",
-    otherRetentionsInfo: "▪ PORTAL\n ▪ Clearance - 5 working days\n▪ Lapses after - 60 days of 1st missed DD\n▪ Can cancel on portal/change bank details\n▪ Can reinstate DD on portal\n▪ \"DD REJECTION\" - currently recollecting. ",
+    otherRetentionsInfo: `▪ PORTAL
+ ▪ Clearance - 5 working days
+▪ Lapses after - 60 days of 1st missed DD
+▪ Can cancel on portal/change bank details
+▪ Can reinstate DD on portal
+▪ "DD REJECTION" - currently recollecting. `,
     emailPassword: "",
     bankDetails: "",
   },
@@ -81,7 +92,13 @@ const insurerDataArray: InsurerInfoEntry[] = [
     missedPaymentsToLapse: "", // Lapses after - 60 days of 1st missed DD
     cancelOnBehalf: "No",
     canReinstateDD: "No",
-    otherRetentionsInfo: "▪ NO PORTAL\n ▪ Clearance - 10 working days\n▪ Lapses after - 60 days of 1st missed DD\n▪ \"1 missed payment\" - currently recollecting.\n▪ Customer can bank transfer arrears.\n▪ Canada Life will attempt next month premium as normal even when 1 missed payment on the account - if this fails DD suspends.\n▪ We cannot set up anything on behalf of client- they have to call to do this. ",
+    otherRetentionsInfo: `▪ NO PORTAL
+ ▪ Clearance - 10 working days
+▪ Lapses after - 60 days of 1st missed DD
+▪ "1 missed payment" - currently recollecting.
+▪ Customer can bank transfer arrears.
+▪ Canada Life will attempt next month premium as normal even when 1 missed payment on the account - if this fails DD suspends.
+▪ We cannot set up anything on behalf of client- they have to call to do this. `,
     emailPassword: "",
     bankDetails: "",
   },
@@ -92,7 +109,11 @@ const insurerDataArray: InsurerInfoEntry[] = [
     missedPaymentsToLapse: "4",
     cancelOnBehalf: "Yes - Cancellation form to IPTIQ",
     canReinstateDD: "No",
-    otherRetentionsInfo: "▪ NO PORTAL\n ▪ Clearance - 4 working days\n▪ 4+ missed payments = Declaration of Health required & all arrears to be cleared.\n▪ Can miss up to 2 payments\n▪ iptiq_serviceops@swissre.com for any cancellations/adhoc recollection/payment link.",
+    otherRetentionsInfo: `▪ NO PORTAL
+ ▪ Clearance - 4 working days
+▪ 4+ missed payments = Declaration of Health required & all arrears to be cleared.
+▪ Can miss up to 2 payments
+▪ iptiq_serviceops@swissre.com for any cancellations/adhoc recollection/payment link.`,
     emailPassword: "",
     bankDetails: "",
   },
@@ -103,7 +124,12 @@ const insurerDataArray: InsurerInfoEntry[] = [
     missedPaymentsToLapse: "3", // 3 missed payments - policy lapse
     cancelOnBehalf: "Yes - Email Isobel",
     canReinstateDD: "Yes",
-    otherRetentionsInfo: "▪ NO PORTAL\n ▪ Clearance - 5 working days\n▪ smith@getesmi.co.uk to check on payments/cancel policy/reinstate DD.\n▪ Customer can send bank transfer to ESMI to make up arrears.\n▪  \"0213  -  REFER TO PAYER\" Automatic double collection when DD is active\n▪ 3 missed payments - policy lapse",
+    otherRetentionsInfo: `▪ NO PORTAL
+ ▪ Clearance - 5 working days
+▪ smith@getesmi.co.uk to check on payments/cancel policy/reinstate DD.
+▪ Customer can send bank transfer to ESMI to make up arrears.
+▪  "0213  -  REFER TO PAYER" Automatic double collection when DD is active
+▪ 3 missed payments - policy lapse`,
     emailPassword: "",
     bankDetails: "",
   },
@@ -114,7 +140,11 @@ const insurerDataArray: InsurerInfoEntry[] = [
     missedPaymentsToLapse: "3", // 3 missed payments - policy lapse
     cancelOnBehalf: "No",
     canReinstateDD: "Yes",
-    otherRetentionsInfo: "▪ NO PORTAL\n ▪ Clearance - 5 working days\n▪  Automatic double collection when DD is active & reattempt 7 days after missed premium.\n▪  We can reinstate DD for customer - can't do manual payments.\n▪ 3 missed payments - policy lapse",
+    otherRetentionsInfo: `▪ NO PORTAL
+ ▪ Clearance - 5 working days
+▪  Automatic double collection when DD is active & reattempt 7 days after missed premium.
+▪  We can reinstate DD for customer - can't do manual payments.
+▪ 3 missed payments - policy lapse`,
     emailPassword: "",
     bankDetails: "",
   },
@@ -125,7 +155,14 @@ const insurerDataArray: InsurerInfoEntry[] = [
     missedPaymentsToLapse: "", // Lapse 90 days after missed payment
     cancelOnBehalf: "Yes",
     canReinstateDD: "Yes",
-    otherRetentionsInfo: "▪ NO PORTAL\n ▪ Check with HSBC before calling customer for the status of the policy\n▪ Clearance - 7-10 working days\n▪ Lapse 90 days after missed payment.\n▪ Can reinstate DD and set up double collection or recollection. Can also cancel policy on behalf of customer.\n▪ Sometimes recollecting when 'Policy in arrears' - call HSBC to check. They keep recollecting until DD suspends.\n▪Customer can bank transfer arrears\n▪ HSBC sometimes recollect premium which causes next month to skip - they will then take a premium as normal the month after if the DD is still active.  - ▪ Can cancel on behalf ",
+    otherRetentionsInfo: `▪ NO PORTAL
+ ▪ Check with HSBC before calling customer for the status of the policy
+▪ Clearance - 7-10 working days
+▪ Lapse 90 days after missed payment.
+▪ Can reinstate DD and set up double collection or recollection. Can also cancel policy on behalf of customer.
+▪ Sometimes recollecting when 'Policy in arrears' - call HSBC to check. They keep recollecting until DD suspends.
+▪Customer can bank transfer arrears
+▪ HSBC sometimes recollect premium which causes next month to skip - they will then take a premium as normal the month after if the DD is still active.  - ▪ Can cancel on behalf `,
     emailPassword: "x=f=Alpha40",
     bankDetails: "",
   },
@@ -136,7 +173,13 @@ const insurerDataArray: InsurerInfoEntry[] = [
     missedPaymentsToLapse: "3+", // 3+ missed payments = Lapse
     cancelOnBehalf: "No",
     canReinstateDD: "Yes",
-    otherRetentionsInfo: "▪ PORTAL\n ▪ Clearance - 11 working days\n▪ 3+ missed payments = Lapse\n▪ Can reinstate DD and set up double on portal if you get clients bank details.\n▪ Alternatively, customer can call to make up payment manually/set up a recollection.\n▪'Reinstatement not required' - L&G recollecting, no need to call. Wait for payment clearance. If it fails the DD auto-cancels.\n▪ Can't cancel on behalf of client.",
+    otherRetentionsInfo: `▪ PORTAL
+ ▪ Clearance - 11 working days
+▪ 3+ missed payments = Lapse
+▪ Can reinstate DD and set up double on portal if you get clients bank details.
+▪ Alternatively, customer can call to make up payment manually/set up a recollection.
+▪'Reinstatement not required' - L&G recollecting, no need to call. Wait for payment clearance. If it fails the DD auto-cancels.
+▪ Can't cancel on behalf of client.`,
     emailPassword: "Candidinsuranceservices1!",
     bankDetails: "",
   },
@@ -147,7 +190,12 @@ const insurerDataArray: InsurerInfoEntry[] = [
     missedPaymentsToLapse: "3+", // 3+ missed payments = Declaration of Health required
     cancelOnBehalf: "No",
     canReinstateDD: "Yes",
-    otherRetentionsInfo: "▪ NO PORTAL\n ▪ Payment clearance - 5 working days\n▪ 3+ missed payments = Declaration of Health required\n▪ Can set up double/triple collection on behalf of client\n▪ Can set up 3-5 working day collection on behalf of client\n ▪ \"DD Reject/ Refer to payer\" - currently reattempting",
+    otherRetentionsInfo: `▪ NO PORTAL
+ ▪ Payment clearance - 5 working days
+▪ 3+ missed payments = Declaration of Health required
+▪ Can set up double/triple collection on behalf of client
+▪ Can set up 3-5 working day collection on behalf of client
+ ▪ "DD Reject/ Refer to payer" - currently reattempting`,
     emailPassword: "wNP!TpRv",
     bankDetails: "",
   },
@@ -158,7 +206,11 @@ const insurerDataArray: InsurerInfoEntry[] = [
     missedPaymentsToLapse: "Claims number: 800 031 8672 (option 2)", // This was in the 'missed payments' column
     cancelOnBehalf: "Yes - Cancellation form to IPTIQ",
     canReinstateDD: "Yes",
-    otherRetentionsInfo: "▪ NO PORTAL\n▪ Clearance - 8 working days\n▪ Cancellation 30 days after 3rd miss payment\n▪ Can miss 2 payments and retain cover. \n▪ iptiq_serviceops@swissre.com - email for any payment queries/cancellations/NT forms/dd reinstatements etc. ",
+    otherRetentionsInfo: `▪ NO PORTAL
+▪ Clearance - 8 working days
+▪ Cancellation 30 days after 3rd miss payment
+▪ Can miss 2 payments and retain cover. 
+▪ iptiq_serviceops@swissre.com - email for any payment queries/cancellations/NT forms/dd reinstatements etc. `,
     emailPassword: "",
     bankDetails: "",
   },
@@ -169,7 +221,12 @@ const insurerDataArray: InsurerInfoEntry[] = [
     missedPaymentsToLapse: "3", // 3 missed payments - policy lapse
     cancelOnBehalf: "No",
     canReinstateDD: "No",
-    otherRetentionsInfo: "▪ NO PORTAL\n ▪ Clearance - 5 working days\n▪ Can't cancel policy on behalf of client\n▪ \"1 missed\" -  Automatic double collection when 1 missed payment.\n▪ 3 missed payments - policy lapse\n▪ Customer has to call to make payments.",
+    otherRetentionsInfo: `▪ NO PORTAL
+ ▪ Clearance - 5 working days
+▪ Can't cancel policy on behalf of client
+▪ "1 missed" -  Automatic double collection when 1 missed payment.
+▪ 3 missed payments - policy lapse
+▪ Customer has to call to make payments.`,
     emailPassword: "Candid123",
     bankDetails: "",
   },
@@ -180,7 +237,10 @@ const insurerDataArray: InsurerInfoEntry[] = [
     missedPaymentsToLapse: "", // Depends on how many missed
     cancelOnBehalf: "Yes - Call Insurer Directly",
     canReinstateDD: "Yes",
-    otherRetentionsInfo: "▪ NO PORTAL\n ▪ Clearance - 5 working days\n▪  \"DD OPEN - 2 PAYMENTS DUE NEXT PAYMENT\" Automatic double/triple collection when DD is active depending on how many payments missed.\n▪ Can set up a 14 day recollection ",
+    otherRetentionsInfo: `▪ NO PORTAL
+ ▪ Clearance - 5 working days
+▪  "DD OPEN - 2 PAYMENTS DUE NEXT PAYMENT" Automatic double/triple collection when DD is active depending on how many payments missed.
+▪ Can set up a 14 day recollection `,
     emailPassword: "ON962Y",
     bankDetails: "",
   },
@@ -191,7 +251,10 @@ const insurerDataArray: InsurerInfoEntry[] = [
     missedPaymentsToLapse: "3", // Lapses after 3 missed payments
     cancelOnBehalf: "No",
     canReinstateDD: "Yes",
-    otherRetentionsInfo: "▪ NO PORTAL\n▪ Clearance - 5 working days\n▪  Can do payment links, manual payments and we can set up double collection\n▪ Lapses after 3 missed payments. ",
+    otherRetentionsInfo: `▪ NO PORTAL
+▪ Clearance - 5 working days
+▪  Can do payment links, manual payments and we can set up double collection
+▪ Lapses after 3 missed payments. `,
     emailPassword: "C&*d1dSf!",
     bankDetails: "",
   },
@@ -202,7 +265,13 @@ const insurerDataArray: InsurerInfoEntry[] = [
     missedPaymentsToLapse: "3", // 3 missed payments - lapses the policy
     cancelOnBehalf: "No", // Based on "Can cancel on behalf of the client." being "No" for similar entries, assumed "No" was missing
     canReinstateDD: "No", // Assuming based on the prompt for other insurers. The source says "Can cancel on behalf of the client." but not for reinstating DD. Adjust if needed.
-    otherRetentionsInfo: "▪ NO PORTAL\n▪ Clearance - 4 working days\n▪ 3 missed payments - lapses the policy\n▪ Can set up 7 working day recollection/double collection on behalf of client. \n▪ Can cancel on behalf of the client.\n▪ Customer can be transferred to make manual payment \n▪ Automatic 9 working day recollection is in place when 'Refer to payer' ",
+    otherRetentionsInfo: `▪ NO PORTAL
+▪ Clearance - 4 working days
+▪ 3 missed payments - lapses the policy
+▪ Can set up 7 working day recollection/double collection on behalf of client. 
+▪ Can cancel on behalf of the client.
+▪ Customer can be transferred to make manual payment 
+▪ Automatic 9 working day recollection is in place when 'Refer to payer' `,
     emailPassword: "",
     bankDetails: "",
   },
@@ -213,7 +282,11 @@ const insurerDataArray: InsurerInfoEntry[] = [
     missedPaymentsToLapse: "3", // Lapses after 3 missed payments
     cancelOnBehalf: "Yes",
     canReinstateDD: "Yes",
-    otherRetentionsInfo: "▪ NO PORTAL\n ▪ Clearance - 5 working days\n ▪ \"1 missing\"-  Auto-recollection 14 days after missed premium.\n▪  Customer needs to call to make up premium over the phone\n ▪ Lapses after 3 missed payments. ",
+    otherRetentionsInfo: `▪ NO PORTAL
+ ▪ Clearance - 5 working days
+ ▪ "1 missing"-  Auto-recollection 14 days after missed premium.
+▪  Customer needs to call to make up premium over the phone
+ ▪ Lapses after 3 missed payments. `,
     emailPassword: "VitalityEWR2022",
     bankDetails: "",
   },
@@ -224,7 +297,10 @@ const insurerDataArray: InsurerInfoEntry[] = [
     missedPaymentsToLapse: "2", // Lapses after 2 missed payments
     cancelOnBehalf: "No",
     canReinstateDD: "No",
-    otherRetentionsInfo: "▪ NO PORTAL\n▪ Clearance - 5 working days\n▪  Customer needs to call to make up premium\n▪ Lapses after 2 missed payments. ",
+    otherRetentionsInfo: `▪ NO PORTAL
+▪ Clearance - 5 working days
+▪  Customer needs to call to make up premium
+▪ Lapses after 2 missed payments. `,
     emailPassword: "",
     bankDetails: "",
   },
@@ -263,11 +339,16 @@ const renderBooleanBadge = (value: string) => {
   if (lowerValue === '?') {
     return <Badge variant="secondary">?</Badge>;
   }
-  return value || '-'; // Display value or hyphen if empty
+  return value || '-';
 };
 
-
 export function WholeOfMarketSection() {
+  const [searchTerm, setSearchTerm] = React.useState('');
+
+  const filteredInsurerData = insurerDataArray.filter((insurer) =>
+    insurer.insurer.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <Card className="w-full shadow-lg">
       <CardHeader>
@@ -277,15 +358,16 @@ export function WholeOfMarketSection() {
         <CardDescription>
           Quick reference for insurer contact details, recollection options, and retention information.
         </CardDescription>
+        <Input 
+          type="text"
+          placeholder="Search by insurer name..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="mt-4"
+        />
       </CardHeader>
       <CardContent>
-        {/* This div defines the height and enables scrolling for the Table */}
-        <div className="h-[70vh] w-full overflow-auto border rounded-md">
-          {/*
-            We use a raw <table> element here instead of ShadCN's <Table>
-            to ensure that our sticky header and column work correctly within
-            this specific scrollable container.
-          */}
+        <div className="h-[65vh] w-full overflow-auto border rounded-md">
           <table className={cn("w-full caption-bottom text-sm")}>
             <TableHeader className="sticky top-0 bg-background z-10">
               <TableRow>
@@ -301,7 +383,7 @@ export function WholeOfMarketSection() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {insurerDataArray.map((insurer) => (
+              {filteredInsurerData.map((insurer) => (
                 <TableRow key={insurer.insurer}>
                   <TableCell className="font-medium sticky left-0 bg-background z-5">{insurer.insurer}</TableCell>
                   <TableCell>{insurer.contactInformation || '-'}</TableCell>

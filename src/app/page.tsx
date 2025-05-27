@@ -153,7 +153,10 @@ export default function Home() {
 
   const handleCancelEdit = useCallback(() => {
     setEventToEdit(null);
+    // Consider resetting form fields in TimeLogForm via its own useEffect or a direct call if needed
+    // For now, assuming TimeLogForm handles its reset when eventToEdit becomes null
   }, []);
+
 
   const handleDeleteEvent = useCallback(async (id: string) => {
       if (!user) {
@@ -186,14 +189,15 @@ export default function Home() {
         timestamp: Timestamp.fromDate(new Date()),
       };
       await addDoc(collection(db, EVENTS_COLLECTION), newEvent);
-      toast({ title: "Success", description: "Time log entry added." });
+      // Success toast now handled in TimeLogForm onSubmit
+      // form.reset({ ...initialDefaultValues, date: new Date() }); // This should be handled in TimeLogForm
     } catch (error) {
       console.error("Error adding time log: ", error);
-      toast({ variant: "destructive", title: "Error", description: "Failed to add time log entry." });
+      // Error toast handled in TimeLogForm onSubmit
     } finally {
         setIsProcessingForm(false);
     }
-  }, [user, toast]);
+  }, [user, toast]); // Removed form from dependencies
 
   const editLogEntry = useCallback(async (updatedEvent: LoggedEvent) => {
       if (!user) {
@@ -207,15 +211,18 @@ export default function Home() {
       setIsProcessingForm(true);
       try {
           const eventRef = doc(db, EVENTS_COLLECTION, updatedEvent.id);
+          // Prepare data for update, ensuring timestamp is Firestore Timestamp
           const dataToUpdate: Partial<Omit<LoggedEvent, 'id'>> = {
               advisorId: updatedEvent.advisorId,
-              date: updatedEvent.date,
+              date: updatedEvent.date, // Should be 'yyyy-MM-dd' string from form
               eventType: updatedEvent.eventType,
               eventDetails: updatedEvent.eventDetails,
               loggedTime: updatedEvent.loggedTime,
-              timestamp: Timestamp.fromDate(new Date()),
+              // taskId: updatedEvent.taskId || null, // Ensure taskId is null if undefined/empty
+              timestamp: Timestamp.fromDate(new Date()), // Update timestamp on edit
           };
 
+          // Remove undefined keys to prevent Firestore errors
           Object.keys(dataToUpdate).forEach(key => {
               const typedKey = key as keyof typeof dataToUpdate;
               if (dataToUpdate[typedKey] === undefined) {
@@ -223,16 +230,17 @@ export default function Home() {
               }
           });
 
+          // If eventType is not 'Other', ensure eventDetails is null
           if (dataToUpdate.eventType !== 'Other' && dataToUpdate.hasOwnProperty('eventDetails')) {
               dataToUpdate.eventDetails = null;
           }
 
           await updateDoc(eventRef, dataToUpdate);
-          toast({ title: "Success", description: "Log entry updated." });
-          setEventToEdit(null);
+          // Success toast handled in TimeLogForm
+          setEventToEdit(null); // Clear edit mode
       } catch (error) {
           console.error("Error editing log entry: ", error);
-          toast({ variant: "destructive", title: "Error", description: "Failed to update log entry." });
+          // Error toast handled in TimeLogForm
       } finally {
           setIsProcessingForm(false);
       }
@@ -241,18 +249,14 @@ export default function Home() {
 
   const addAdvisor = useCallback(async (name: string) => {
     if (!user) {
-        toast({ variant: "destructive", title: "Error", description: "You must be logged in to manage advisors." });
+        // Toast handled by AdvisorManager
         return;
     }
     const trimmedName = name.trim();
-    if (!trimmedName) {
-        toast({ variant: "destructive", title: "Error", description: "Advisor name cannot be empty." });
-        return;
-    }
-    if (advisors.some(a => a.name.toLowerCase() === trimmedName.toLowerCase())) {
-      toast({ variant: "destructive", title: "Error", description: `Advisor '${trimmedName}' already exists.` });
-      return;
-    }
+    // Validation handled by AdvisorManager
+
+    // Duplicate check handled by AdvisorManager
+
     try {
         const newAdvisor = { name: trimmedName, userId: user.uid };
         await addDoc(collection(db, ADVISORS_COLLECTION), newAdvisor);
@@ -260,68 +264,58 @@ export default function Home() {
     } catch (error) {
         console.error("Error adding advisor: ", error);
         toast({ variant: "destructive", title: "Error", description: "Failed to add advisor." });
+        // Rethrow or indicate failure so AdvisorManager can handle UI state
+        throw error;
     }
   }, [advisors, user, toast]);
 
   const removeAdvisor = useCallback(async (id: string) => {
     if (!user) {
-      toast({ variant: "destructive", title: "Error", description: "You must be logged in to manage advisors." });
+      // Toast handled by AdvisorManager
       return;
     }
     const advisorToRemove = advisors.find(a => a.id === id);
-    if (!advisorToRemove) {
-      toast({ variant: "warning", title: "Not Found", description: `Advisor not found.` });
-      return;
-    }
+    // Advisor not found handled by AdvisorManager
 
     if (loggedEvents.some(event => event.advisorId === id)) {
         toast({
             variant: "destructive",
             title: "Deletion Failed",
-            description: `Cannot delete advisor '${advisorToRemove.name}' as they have logged time entries. Please reassign or delete the logs first.`,
-            duration: 5000,
+            description: `Cannot delete advisor '${advisorToRemove?.name || 'this advisor'}' as they have logged time entries. Please reassign or delete the logs first.`,
+            duration: 7000, // Longer duration for important messages
         });
-        return;
+        throw new Error("Advisor has logged events"); // Indicate failure
     }
 
     try {
         await deleteDoc(doc(db, ADVISORS_COLLECTION, id));
-        toast({ title: "Success", description: `Advisor '${advisorToRemove.name}' removed.` });
+        toast({ title: "Success", description: `Advisor '${advisorToRemove?.name || 'Advisor'}' removed.` });
     } catch (error) {
         console.error("Error removing advisor: ", error);
         toast({ variant: "destructive", title: "Error", description: "Failed to remove advisor." });
+        throw error; // Indicate failure
     }
 }, [advisors, loggedEvents, user, toast]);
 
 
   const editAdvisor = useCallback(async (id: string, newName: string) => {
     if (!user) {
-      toast({ variant: "destructive", title: "Error", description: "You must be logged in to manage advisors." });
+      // Toast handled by AdvisorManager
       return;
     }
     const trimmedNewName = newName.trim();
-    if (!trimmedNewName) {
-      toast({ variant: "destructive", title: "Error", description: "Advisor name cannot be empty." });
-      return;
-    }
-    const originalAdvisor = advisors.find(a => a.id === id);
-    if (!originalAdvisor) {
-         toast({ variant: "warning", title: "Not Found", description: `Advisor not found.` });
-         return;
-    }
+    // Validation and duplicate checks handled by AdvisorManager
 
-    if (advisors.some(a => a.id !== id && a.name.toLowerCase() === trimmedNewName.toLowerCase())) {
-      toast({ variant: "destructive", title: "Error", description: `Advisor name '${trimmedNewName}' already exists.` });
-      return;
-    }
+    const originalAdvisor = advisors.find(a => a.id === id);
 
     try {
         const advisorRef = doc(db, ADVISORS_COLLECTION, id);
         await updateDoc(advisorRef, { name: trimmedNewName });
-        toast({ title: "Success", description: `Advisor '${originalAdvisor.name}' renamed to '${trimmedNewName}'.` });
+        toast({ title: "Success", description: `Advisor '${originalAdvisor?.name || 'Advisor'}' renamed to '${trimmedNewName}'.` });
     } catch (error) {
         console.error("Error editing advisor: ", error);
         toast({ variant: "destructive", title: "Error", description: "Failed to rename advisor." });
+        throw error; // Indicate failure
     }
 }, [advisors, user, toast]);
 
@@ -353,11 +347,17 @@ export default function Home() {
     try {
       await signOut(auth);
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
+      // Reset local state if needed
+      setLoggedEvents([]);
+      setAdvisors([]);
+      setEventToEdit(null);
+      // Any other state resets for a clean logout
     } catch (error) {
       console.error("Logout Error:", error);
       toast({ variant: "destructive", title: "Logout Failed", description: "An error occurred during logout." });
     }
   };
+
 
   if (isLoadingAuth) {
     return (
@@ -373,7 +373,7 @@ export default function Home() {
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
              <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-4">
                  <header className="flex justify-center items-center relative mb-8 pb-4 border-b w-full max-w-4xl">
-                    <div className="w-48 h-16 relative">
+                    <div className="w-48 h-16 relative flex justify-center items-center">
                        <Image
                            src="/Tempo_logo_transparent.png" // Assuming it's in /public
                            alt="Tempo Logo"
@@ -403,7 +403,7 @@ export default function Home() {
        <div className="container mx-auto p-4 md:p-8">
 
          <header className="flex justify-center items-center relative mb-8 pb-4 border-b">
-             <div className="w-48 h-16 relative"> {/* Container for the logo */}
+             <div className="w-48 h-16 relative flex justify-center items-center"> {/* Container for the logo */}
                 <Image
                     src="/Tempo_logo_transparent.png" // Ensure this path is correct and the image is in /public
                     alt="Tempo Logo"
@@ -530,5 +530,3 @@ export default function Home() {
     </ThemeProvider>
   );
 }
-
-    
