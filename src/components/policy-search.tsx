@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useCallback } from 'react'; // Keep useState for local search term/result
@@ -6,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, Search, Upload, FileText, AlertCircle, CalendarClock, Receipt, CheckCircle } from 'lucide-react'; // Added CheckCircle, removed Smile
+import { Loader2, Search, Upload, FileText, AlertCircle, CalendarClock, Receipt, CheckCircle, Sigma } from 'lucide-react'; // Added Sigma
 
 // Define the structure for policy information extracted from the CSV
 type PolicyInfo = {
@@ -17,11 +18,9 @@ type PolicyInfo = {
   potentialCancellationDate?: string; // Optional: Calculated cancellation date for specific 'ON_RISK' cases
   currentGrossPremiumPerFrequency?: string; // Optional: Monthly premium amount
   maxNextPremiumCollectionDate?: string; // Optional: Next payment date
+  numberOfPaidPremiums?: string; // Optional: Number of payments made
 };
 export type PolicyDataMap = Map<string, PolicyInfo>; // Export PolicyDataMap type
-
-// Type for the efficient lookup map
-// type PolicyDataMap = Map<string, PolicyInfo>; // Removed duplicate
 
 // Helper function to parse dd/MM/yyyy (or dd/MM/yyyy HH:mm:ss) and add 30 days
 function calculatePotentialCancellationDate(dateStr: string): string | null {
@@ -180,6 +179,7 @@ export function PolicySearch({
   const CANCELLATION_REASON_COL = 'Cancellation Reason'; // Focus on this column for the reason text
   const CURRENT_GROSS_PREMIUM_COL = 'Current Gross Premium Per Frequency'; // New column for monthly premium
   const NEXT_PREMIUM_DATE_COL = 'Max. Next Premium Collection Date'; // New column for next collection date
+  const NUMBER_OF_PAID_PREMIUMS_COL = 'Number Of Paid Premiums'; // New column for paid premiums
   // --- End Constants ---
 
   const handleFileChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
@@ -221,7 +221,7 @@ export function PolicySearch({
 
         if (missingColumns.length > 0) {
             const expectedHeaders = `'${requiredBaseColumns.join("', '")}'`;
-            const optionalHeaders = `'${CANCELLATION_REASON_COL}', '${CURRENT_GROSS_PREMIUM_COL}', '${NEXT_PREMIUM_DATE_COL}'`;
+            const optionalHeaders = `'${CANCELLATION_REASON_COL}', '${CURRENT_GROSS_PREMIUM_COL}', '${NEXT_PREMIUM_DATE_COL}', '${NUMBER_OF_PAID_PREMIUMS_COL}'`;
             setParseError(`Missing required columns in CSV: ${missingColumns.join(', ')}. Expected: ${expectedHeaders}. Optional: ${optionalHeaders}.`);
             setIsLoading(false);
             setFileName(null);
@@ -232,6 +232,7 @@ export function PolicySearch({
         const hasCancellationColumn = actualHeaders.includes(CANCELLATION_REASON_COL);
         const hasPremiumColumn = actualHeaders.includes(CURRENT_GROSS_PREMIUM_COL);
         const hasNextDateColumn = actualHeaders.includes(NEXT_PREMIUM_DATE_COL);
+        const hasPaidPremiumsColumn = actualHeaders.includes(NUMBER_OF_PAID_PREMIUMS_COL);
 
 
         results.data.forEach((row) => {
@@ -285,6 +286,20 @@ export function PolicySearch({
              }
              // --- End Extract Next Premium Collection Date ---
 
+             // --- Extract Number of Paid Premiums ---
+             let numberOfPaidPremiums: string | undefined = undefined;
+             if (hasPaidPremiumsColumn) {
+                 const paidPremiumsValue = row[NUMBER_OF_PAID_PREMIUMS_COL];
+                 if (typeof paidPremiumsValue === 'string' || typeof paidPremiumsValue === 'number') {
+                     const trimmedPaidPremiums = String(paidPremiumsValue).trim();
+                     if (trimmedPaidPremiums.length > 0) {
+                         numberOfPaidPremiums = trimmedPaidPremiums;
+                     }
+                 }
+             }
+             // --- End Extract Number of Paid Premiums ---
+
+
             // --- Calculate Potential Cancellation Date ---
             let potentialCancellationDate: string | undefined = undefined;
             const statusUpper = status.toUpperCase();
@@ -307,6 +322,7 @@ export function PolicySearch({
               potentialCancellationDate: potentialCancellationDate, // Add calculated date here
               currentGrossPremiumPerFrequency: currentGrossPremiumPerFrequency, // Add premium
               maxNextPremiumCollectionDate: maxNextPremiumCollectionDate, // Add next collection date
+              numberOfPaidPremiums: numberOfPaidPremiums, // Add number of paid premiums
             });
           }
         });
@@ -425,7 +441,7 @@ export function PolicySearch({
                    {/* Display Next Payment Cleared Status */}
                    {checkNextPaymentCleared(searchResult) && (
                      <p className="flex items-center text-green-600 font-semibold">
-                       <CheckCircle className="mr-2 h-4 w-4" /> Next payment cleared {/* Changed icon */}
+                       <CheckCircle className="mr-2 h-4 w-4" /> Next payment cleared
                      </p>
                    )}
 
@@ -435,6 +451,15 @@ export function PolicySearch({
                         <Receipt className="mr-2 h-4 w-4 text-blue-600"/>
                         <strong>Monthly Premium:</strong>
                         <span className="ml-1 font-semibold text-blue-700">£{searchResult.currentGrossPremiumPerFrequency}</span>
+                    </p>
+                  )}
+
+                  {/* Display Number of Paid Premiums */}
+                  {searchResult.numberOfPaidPremiums !== undefined && searchResult.numberOfPaidPremiums !== null && searchResult.numberOfPaidPremiums.trim() !== '' && (
+                    <p className="flex items-center">
+                        <Sigma className="mr-2 h-4 w-4 text-indigo-600"/>
+                        <strong>Payments Made:</strong>
+                        <span className="ml-1">{searchResult.numberOfPaidPremiums}</span>
                     </p>
                   )}
 
@@ -480,3 +505,4 @@ export function PolicySearch({
     </Card>
   );
 }
+
