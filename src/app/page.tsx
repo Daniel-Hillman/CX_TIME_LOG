@@ -41,7 +41,7 @@ import { SignUpForm } from '@/components/auth/signup-form';
 import { Button } from '@/components/ui/button';
 import { useToast } from "@/hooks/use-toast";
 import { Calendar, Clock, Users, AreaChart, FileSearch, FileCheck2, LogOut, Loader2, Building2 } from 'lucide-react'; // Added Building2
-import Image from 'next/image';
+// Removed Image import as it's no longer used for the logo
 
 // Types
 import { Advisor, LoggedEvent, StandardEventType, standardEventTypes } from '@/types';
@@ -218,7 +218,6 @@ export default function Home() {
               eventType: updatedEvent.eventType,
               eventDetails: updatedEvent.eventDetails,
               loggedTime: updatedEvent.loggedTime,
-              // taskId: updatedEvent.taskId || null, // Ensure taskId is null if undefined/empty
               timestamp: Timestamp.fromDate(new Date()), // Update timestamp on edit
           };
 
@@ -373,14 +372,8 @@ export default function Home() {
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
              <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-4">
                  <header className="flex justify-center items-center relative mb-8 pb-4 border-b w-full max-w-4xl">
-                    <div className="w-48 h-16 relative flex justify-center items-center">
-                       <Image
-                           src="/Tempo_logo_transparent.png" // Assuming it's in /public
-                           alt="Tempo Logo"
-                           fill
-                           style={{ objectFit: 'contain' }}
-                           priority
-                       />
+                    <div className="text-5xl font-designer font-bold">
+                       Tempo
                     </div>
                     <div className="absolute right-0 top-1/2 transform -translate-y-1/2">
                         <ThemeToggle />
@@ -403,14 +396,8 @@ export default function Home() {
        <div className="container mx-auto p-4 md:p-8">
 
          <header className="flex justify-center items-center relative mb-8 pb-4 border-b">
-             <div className="w-48 h-16 relative flex justify-center items-center"> {/* Container for the logo */}
-                <Image
-                    src="/Tempo_logo_transparent.png" // Ensure this path is correct and the image is in /public
-                    alt="Tempo Logo"
-                    fill // Use fill and objectFit
-                    style={{ objectFit: 'contain' }} // Ensures the image scales within the container
-                    priority // Optional: if it's an LCP element
-                />
+            <div className="text-5xl font-designer font-bold">
+                Tempo
             </div>
              <div className="absolute right-0 top-1/2 transform -translate-y-1/2 flex items-center space-x-2">
                  {user.email && <span className="text-sm text-muted-foreground hidden md:inline">{user.email}</span>}
