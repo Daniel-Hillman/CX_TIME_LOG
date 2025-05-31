@@ -1,12 +1,13 @@
+
 'use client';
 
 import * as React from 'react';
-import { useState, useCallback, useRef } from 'react'; // Added useRef
+import { useState, useCallback, useRef } from 'react';
 import Papa from 'papaparse';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Download, Loader2, FileCheck2, CheckCircle, Copy, Eraser, FileText, FileType } from 'lucide-react'; // Added Eraser, FileText, FileType
+import { Download, Loader2, FileCheck2, CheckCircle, Copy, Eraser, FileText, FileType, Info } from 'lucide-react';
 import {
   Accordion,
   AccordionContent,
@@ -23,11 +24,10 @@ type PolicyInfo = {
   potentialCancellationDate?: string;
   currentGrossPremiumPerFrequency?: string;
   maxNextPremiumCollectionDate?: string;
-  startingDate?: string; // Add Starting Date field
-  [key: string]: any; // Allows for any other fields from the CSV
+  startingDate?: string;
+  [key: string]: any;
 };
 
-// --- CSV Column Header Constants ---
 const POLICY_NUMBER_COL = 'Policy Number';
 const STATUS_COL = 'Policy Status';
 const MISSED_PAYMENT_1_COL = 'Due Date of 1st Arrear';
@@ -36,31 +36,28 @@ const MISSED_PAYMENT_3_COL = 'Due Date of 3rd Arrear';
 const CANCELLATION_REASON_COL = 'Cancellation Reason';
 const CURRENT_GROSS_PREMIUM_COL = 'Current Gross Premium Per Frequency';
 const NEXT_PREMIUM_DATE_COL = 'Max. Next Premium Collection Date';
-const STARTING_DATE_COL = 'Starting Date'; // Constant for Starting Date
+const STARTING_DATE_COL = 'Starting Date';
 
-// --- Unwanted Header Constants for Filtering Output ---
 const UNWANTED_HEADERS = [
     'Distribution Partner',
     'Product Name',
     'Sales Channel',
-    'Broker ID', // Added Broker ID as per common CSV structures, can be adjusted
+    'Broker ID',
     'Sold Date',
-    'Exit Date', // Commonly not needed for this report type
-    'Cancellation Type', // Often detailed by Cancellation Reason
-    'Policy Type', // Specific display logic might handle this if needed
+    'Exit Date',
+    'Cancellation Type',
+    'Policy Type',
     'LOAP Consent',
     'Premium Escalation Type',
     'Benefit Escalation Type',
-    'Current Sum Sumassured', // Typically too detailed for summary
-    'Current Gross Premium Annualized', // Per Frequency is usually more direct
-    'Premium Frequency', // Implicit or can be part of premium string
-    'Blank', // Common name for empty/utility columns
+    'Current Sum Sumassured',
+    'Current Gross Premium Annualized',
+    'Premium Frequency',
+    'Blank',
     'Number Of Paid Premiums',
     'Number Of Unpaid Premiums',
     'Value Of Premiums Collected',
 ];
-
-// --- Helper Functions ---
 
 function parseDate(dateStr: string): Date | null {
   if (!dateStr) return null;
@@ -134,13 +131,10 @@ function checkNextPaymentCleared(policy: PolicyInfo): boolean {
   return currentUTCDate >= clearedDatePlus5Days;
 }
 
-// Helper to extract numeric part of policy number for sorting
 function extractPolicyNumberNumeric(policyNumber: string): number {
   const match = policyNumber.match(/\d+$/);
   return match ? parseInt(match[0], 10) : 0;
 }
-
-// --- End Helper Functions ---
 
 interface NextClearedBatchProps {}
 
@@ -302,7 +296,6 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
             return numA - numB;
           });
 
-
           setProcessedData(policies);
           if (policies.length > 0) {
             toast({ title: "Processing Complete", description: `${policies.length} matching and cleared policies found.` });
@@ -337,7 +330,7 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
                 report += `Missed Payments: ${policy.missedPayments.length > 0 ? policy.missedPayments.join(', ') : 'None'}\n`;
             } else {
                 const value = policy[header] ?? 'N/A';
-                report += `${header.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}: ${value}\n`; // Format header for readability
+                report += `${header.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}: ${value}\n`;
             }
        });
       report += "\n";
@@ -371,7 +364,7 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
         mimeType = 'text/plain;charset=utf-8;';
         fileName = `next_cleared_batch_report.txt`;
         break;
-      case 'pdf': // "PDF (Text)" button will now download a CSV for Sheets compatibility
+      case 'pdf':
       case 'csv':
         fileContent = Papa.unparse({
             fields: csvHeaders,
@@ -384,10 +377,8 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
         });
         mimeType = 'text/csv;charset=utf-8;';
         if (format === 'pdf') {
-            // User clicked "PDF (Text)" button, give them a CSV that's good for Sheets.
             fileName = 'next_cleared_batch_report_for_sheets.csv';
         } else {
-            // User clicked "Download CSV" button.
             fileName = 'next_cleared_batch_data.csv';
         }
         break;
@@ -406,15 +397,12 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
     toast({ title: "Download Started", description: `The results file (${fileName}) is being downloaded.` });
   }, [processedData, dashboardHeaders, toast]);
 
-  // Define which details to show in the accordion content, excluding UNWANTED_HEADERS
   const accordionDisplayHeaders = [
       STATUS_COL,
-      'missedPayments', // Handled specially
+      'missedPayments',
       NEXT_PREMIUM_DATE_COL,
       STARTING_DATE_COL,
-      // CURRENT_GROSS_PREMIUM_COL, // This is already shown in the trigger, not needed here again
   ].filter(h => !UNWANTED_HEADERS.includes(h));
-
 
   return (
     <Card className="w-full max-w-2xl mx-auto">
@@ -485,7 +473,7 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
                 </Button>
                 <Button onClick={() => downloadResults('pdf')} className="w-full" variant="outline">
                     <FileType className="mr-2 h-4 w-4" />
-                    Download PDF (Text)
+                    CSV for Sheets
                 </Button>
             </div>
 
@@ -532,12 +520,10 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
                             </p>
                           );
                         }
-                        // Format header names for display (e.g., maxNextPremiumCollectionDate -> Max Next Premium Collection Date)
                         const displayName = headerKey
-                            .replace(/([A-Z])/g, ' $1') // Add space before uppercase letters
-                            .replace(/_/g, ' ') // Replace underscores with spaces
-                            .replace(/^./, str => str.toUpperCase()); // Capitalize first letter
-
+                            .replace(/([A-Z])/g, ' $1')
+                            .replace(/_/g, ' ')
+                            .replace(/^./, str => str.toUpperCase());
 
                         if (policy[headerKey] !== undefined && policy[headerKey] !== null && String(policy[headerKey]).trim() !== '') {
                           return (
@@ -555,9 +541,37 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
             </Accordion>
           </div>
         )}
+        <div className="pt-4">
+          <Accordion type="single" collapsible className="w-full">
+            <AccordionItem value="instructions">
+              <AccordionTrigger>
+                <div className="flex items-center">
+                  <Info className="mr-2 h-4 w-4" />
+                  How to use this feature
+                </div>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  <p><strong>Step 1:</strong> Upload the Daily Dashboard as a .csv file in the first box.</p>
+                  <p><strong>Step 2:</strong> Filter your individual tracker (spreadsheet) to remove leads that are not back on risk, lapsed, TBL (To Be Lapsed), etc.</p>
+                  <p><strong>Step 3:</strong> In your filtered tracker, click on the top of the column containing policy numbers to select all policy numbers you are actively working. Copy this selection (Ctrl+C or Cmd+C).</p>
+                  <p><strong>Step 4:</strong> Open a new spreadsheet (e.g., File &gt; New &gt; Spreadsheet in Google Sheets or Excel).</p>
+                  <p><strong>Step 5:</strong> Paste (Ctrl+V or Cmd+V) all the active policy numbers into the first column of the newly created spreadsheet.</p>
+                  <p><strong>Step 6:</strong> Export this new spreadsheet as a CSV file (e.g., File &gt; Download &gt; .csv). Name it something like "[Your Name] Policies to Check.csv".</p>
+                  <p><strong>Step 7:</strong> Upload this newly created CSV file to the 'Cleared Batch File' input box on this page.</p>
+                  <p><strong>Step 8:</strong> Press the "Process Files" button and wait a few seconds for the results.</p>
+                  <p><strong>Step 9:</strong> You can then download the results as a TXT file (or CSV for Sheets). Save this file to your computer for easy access and work through the identified cases.</p>
+                  <p><strong>NOTE:</strong> Always double-check the missed payments and other details to ensure you can actually work the lead and put it back on risk. The algorithm has high accuracy but may occasionally make mistakes.</p>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </div>
       </CardContent>
     </Card>
   );
 };
 
 export default NextClearedBatch;
+
+    
