@@ -40,8 +40,7 @@ import { LoginForm } from '@/components/auth/login-form';
 import { SignUpForm } from '@/components/auth/signup-form';
 import { Button } from '@/components/ui/button';
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, Clock, Users, AreaChart, FileSearch, FileCheck2, LogOut, Loader2, Building2 } from 'lucide-react'; // Added Building2
-// Removed Image import as it's no longer used for the logo
+import { Calendar, Clock, Users, AreaChart, FileSearch, FileCheck2, LogOut, Loader2, Building2, ShieldAlert } from 'lucide-react'; // Added Building2 and ShieldAlert
 
 // Types
 import { Advisor, LoggedEvent, StandardEventType, standardEventTypes } from '@/types';
@@ -50,6 +49,8 @@ import { PolicyDataMap } from '@/components/policy-search';
 // --- Constants for Firestore Collection Names ---
 const ADVISORS_COLLECTION = 'advisors';
 const EVENTS_COLLECTION = 'loggedEvents';
+
+const ADMIN_USERS = ['lauren.jackson@clark.io', 'james.smith@clark.io', 'danielhillman94@hotmail.co.uk'];
 
 export default function Home() {
   const { toast } = useToast();
@@ -70,6 +71,9 @@ export default function Home() {
   const [policyFileName, setPolicyFileName] = useState<string | null>(null);
   const [isPolicyLoading, setIsPolicyLoading] = useState<boolean>(false);
   const [policyParseError, setPolicyParseError] = useState<string | null>(null);
+
+  const currentUserEmail = user?.email || '';
+  const isCurrentUserAdmin = ADMIN_USERS.includes(currentUserEmail);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -118,7 +122,7 @@ export default function Home() {
 
            // Validate eventType before setting state
            if (!event.eventType || !standardEventTypes.includes(event.eventType as StandardEventType)) {
-            console.warn(`Event with id ${event.id} has invalid eventType: ${event.eventType}. Setting to 'Other'.`);
+            console.warn('Event with id ' + event.id + ' has invalid eventType: ' + event.eventType + '. Setting to "Other".');
             event.eventType = 'Other';
           }
           return event as LoggedEvent & { eventType: StandardEventType }; // Assert after validation
@@ -142,7 +146,7 @@ export default function Home() {
 
   const handleEditEvent = useCallback((event: LoggedEvent) => {
     if (typeof event.eventType !== 'string' || !standardEventTypes.includes(event.eventType as StandardEventType)) {
-        console.warn(`Attempting to edit event with non-standard type: ${event.eventType}. Treating as 'Other'.`);
+        console.warn('Attempting to edit event with non-standard type: ' + event.eventType + '. Treating as "Other".');
         setEventToEdit({ ...event, eventType: 'Other' });
     } else {
          setEventToEdit(event as LoggedEvent & { eventType: StandardEventType });
@@ -153,8 +157,6 @@ export default function Home() {
 
   const handleCancelEdit = useCallback(() => {
     setEventToEdit(null);
-    // Consider resetting form fields in TimeLogForm via its own useEffect or a direct call if needed
-    // For now, assuming TimeLogForm handles its reset when eventToEdit becomes null
   }, []);
 
 
@@ -185,19 +187,16 @@ export default function Home() {
     try {
       const newEvent = {
         ...eventData,
-        userId: user.uid,
+        userId: user.uid, 
         timestamp: Timestamp.fromDate(new Date()),
       };
       await addDoc(collection(db, EVENTS_COLLECTION), newEvent);
-      // Success toast now handled in TimeLogForm onSubmit
-      // form.reset({ ...initialDefaultValues, date: new Date() }); // This should be handled in TimeLogForm
     } catch (error) {
       console.error("Error adding time log: ", error);
-      // Error toast handled in TimeLogForm onSubmit
     } finally {
         setIsProcessingForm(false);
     }
-  }, [user, toast]); // Removed form from dependencies
+  }, [user, toast]);
 
   const editLogEntry = useCallback(async (updatedEvent: LoggedEvent) => {
       if (!user) {
@@ -211,17 +210,15 @@ export default function Home() {
       setIsProcessingForm(true);
       try {
           const eventRef = doc(db, EVENTS_COLLECTION, updatedEvent.id);
-          // Prepare data for update, ensuring timestamp is Firestore Timestamp
           const dataToUpdate: Partial<Omit<LoggedEvent, 'id'>> = {
               advisorId: updatedEvent.advisorId,
-              date: updatedEvent.date, // Should be 'yyyy-MM-dd' string from form
+              date: updatedEvent.date,
               eventType: updatedEvent.eventType,
               eventDetails: updatedEvent.eventDetails,
               loggedTime: updatedEvent.loggedTime,
-              timestamp: Timestamp.fromDate(new Date()), // Update timestamp on edit
+              timestamp: Timestamp.fromDate(new Date()),
           };
 
-          // Remove undefined keys to prevent Firestore errors
           Object.keys(dataToUpdate).forEach(key => {
               const typedKey = key as keyof typeof dataToUpdate;
               if (dataToUpdate[typedKey] === undefined) {
@@ -229,17 +226,14 @@ export default function Home() {
               }
           });
 
-          // If eventType is not 'Other', ensure eventDetails is null
           if (dataToUpdate.eventType !== 'Other' && dataToUpdate.hasOwnProperty('eventDetails')) {
               dataToUpdate.eventDetails = null;
           }
 
           await updateDoc(eventRef, dataToUpdate);
-          // Success toast handled in TimeLogForm
-          setEventToEdit(null); // Clear edit mode
+          setEventToEdit(null);
       } catch (error) {
           console.error("Error editing log entry: ", error);
-          // Error toast handled in TimeLogForm
       } finally {
           setIsProcessingForm(false);
       }
@@ -248,86 +242,108 @@ export default function Home() {
 
   const addAdvisor = useCallback(async (name: string) => {
     if (!user) {
-        // Toast handled by AdvisorManager
         return;
     }
+    if (!isCurrentUserAdmin) {
+        toast({
+            variant: "destructive",
+            title: "Permission Denied",
+            description: "You do not have permission to add users.",
+        });
+        throw new Error("Permission Denied");
+    }
     const trimmedName = name.trim();
-    // Validation handled by AdvisorManager
-
-    // Duplicate check handled by AdvisorManager
-
     try {
-        const newAdvisor = { name: trimmedName, userId: user.uid };
+        const newAdvisor = { name: trimmedName, userId: user.uid }; 
         await addDoc(collection(db, ADVISORS_COLLECTION), newAdvisor);
-        toast({ title: "Success", description: `Advisor '${trimmedName}' added.` });
+        toast({ title: "Success", description: "Advisor '" + trimmedName + "' added." });
     } catch (error) {
         console.error("Error adding advisor: ", error);
         toast({ variant: "destructive", title: "Error", description: "Failed to add advisor." });
-        // Rethrow or indicate failure so AdvisorManager can handle UI state
         throw error;
     }
-  }, [advisors, user, toast]);
+  }, [user, toast, isCurrentUserAdmin]);
 
   const removeAdvisor = useCallback(async (id: string) => {
     if (!user) {
-      // Toast handled by AdvisorManager
       return;
     }
+    if (!isCurrentUserAdmin) {
+        toast({
+            variant: "destructive",
+            title: "Permission Denied",
+            description: "You do not have permission to delete users.",
+        });
+        throw new Error("Permission Denied"); 
+    }
+
     const advisorToRemove = advisors.find(a => a.id === id);
-    // Advisor not found handled by AdvisorManager
 
     if (loggedEvents.some(event => event.advisorId === id)) {
         toast({
             variant: "destructive",
             title: "Deletion Failed",
-            description: `Cannot delete advisor '${advisorToRemove?.name || 'this advisor'}' as they have logged time entries. Please reassign or delete the logs first.`,
-            duration: 7000, // Longer duration for important messages
+            description: "Cannot delete advisor '" + (advisorToRemove?.name || 'this advisor') + "' as they have logged time entries. Please reassign or delete the logs first.",
+            duration: 7000,
         });
-        throw new Error("Advisor has logged events"); // Indicate failure
+        throw new Error("Advisor has logged events");
     }
 
     try {
         await deleteDoc(doc(db, ADVISORS_COLLECTION, id));
-        toast({ title: "Success", description: `Advisor '${advisorToRemove?.name || 'Advisor'}' removed.` });
+        toast({ title: "Success", description: "Advisor '" + (advisorToRemove?.name || 'Advisor') + "' removed." });
     } catch (error) {
         console.error("Error removing advisor: ", error);
         toast({ variant: "destructive", title: "Error", description: "Failed to remove advisor." });
-        throw error; // Indicate failure
+        throw error;
     }
-}, [advisors, loggedEvents, user, toast]);
+}, [advisors, loggedEvents, user, toast, isCurrentUserAdmin]);
 
 
   const editAdvisor = useCallback(async (id: string, newName: string) => {
     if (!user) {
-      // Toast handled by AdvisorManager
       return;
     }
+    if (!isCurrentUserAdmin) {
+        toast({
+            variant: "destructive",
+            title: "Permission Denied",
+            description: "You do not have permission to edit users.",
+        });
+        throw new Error("Permission Denied");
+    }
     const trimmedNewName = newName.trim();
-    // Validation and duplicate checks handled by AdvisorManager
-
     const originalAdvisor = advisors.find(a => a.id === id);
 
     try {
         const advisorRef = doc(db, ADVISORS_COLLECTION, id);
         await updateDoc(advisorRef, { name: trimmedNewName });
-        toast({ title: "Success", description: `Advisor '${originalAdvisor?.name || 'Advisor'}' renamed to '${trimmedNewName}'.` });
+        toast({ title: "Success", description: "Advisor '" + (originalAdvisor?.name || 'Advisor') + "' renamed to '" + trimmedNewName + "'." });
     } catch (error) {
         console.error("Error editing advisor: ", error);
         toast({ variant: "destructive", title: "Error", description: "Failed to rename advisor." });
-        throw error; // Indicate failure
+        throw error;
     }
-}, [advisors, user, toast]);
+}, [advisors, user, toast, isCurrentUserAdmin]);
 
   const clearAllLogs = useCallback(async () => {
     if (!user) {
       toast({ variant: "destructive", title: "Error", description: "You must be logged in." });
       return;
     }
+    if (!isCurrentUserAdmin) {
+        toast({
+            variant: "destructive",
+            title: "Permission Denied",
+            description: "You do not have permission to clear all logs.",
+        });
+        return;
+    }
     if (loggedEvents.length === 0) {
         toast({ variant: "default", title: "Info", description: "There are no time logs to clear." });
         return;
     }
-    console.warn(`User ${user.email} initiated Clear All Logs. Deleting ${loggedEvents.length} entries...`);
+    console.warn("User " + user.email + " (Admin: " + isCurrentUserAdmin + ") initiated Clear All Logs. Deleting " + loggedEvents.length + " entries...");
     try {
         const batch = writeBatch(db);
         loggedEvents.forEach(event => {
@@ -340,17 +356,15 @@ export default function Home() {
         console.error("Error clearing all logs: ", error);
         toast({ variant: "destructive", title: "Error", description: "Failed to clear all time logs." });
     }
-  }, [loggedEvents, user, toast]);
+  }, [loggedEvents, user, toast, isCurrentUserAdmin]);
 
   const handleLogout = async () => {
     try {
       await signOut(auth);
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
-      // Reset local state if needed
       setLoggedEvents([]);
       setAdvisors([]);
       setEventToEdit(null);
-      // Any other state resets for a clean logout
     } catch (error) {
       console.error("Logout Error:", error);
       toast({ variant: "destructive", title: "Logout Failed", description: "An error occurred during logout." });
@@ -372,7 +386,7 @@ export default function Home() {
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
              <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-4">
                  <header className="flex justify-center items-center relative mb-8 pb-4 border-b w-full max-w-4xl">
-                    <div className="text-5xl font-designer font-bold">
+                    <div className="text-5xl font-designer font-bold text-blue-500">
                        Tempo
                     </div>
                     <div className="absolute right-0 top-1/2 transform -translate-y-1/2">
@@ -390,13 +404,19 @@ export default function Home() {
     );
   }
 
+  const ManageAdvisorsTrigger = isCurrentUserAdmin ? (
+    <TabsTrigger value="manage-advisors" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
+        <Users className="mr-2 h-4 w-4" /> Manage Advisors
+    </TabsTrigger>
+  ) : null;
+
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
      <div className="min-h-screen bg-background text-foreground">
        <div className="container mx-auto p-4 md:p-8">
 
          <header className="flex justify-center items-center relative mb-8 pb-4 border-b">
-            <div className="text-5xl font-designer font-bold">
+            <div className="text-5xl font-designer font-bold text-blue-500">
                 Tempo
             </div>
              <div className="absolute right-0 top-1/2 transform -translate-y-1/2 flex items-center space-x-2">
@@ -419,15 +439,19 @@ export default function Home() {
                      <TabsTrigger value="time-log" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
                          <Clock className="mr-2 h-4 w-4" /> Time Log
                      </TabsTrigger>
-                     <TabsTrigger value="summary" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
-                         <Calendar className="mr-2 h-4 w-4" /> Summary
-                     </TabsTrigger>
+                     {isCurrentUserAdmin ? (
+                        <TabsTrigger value="summary" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
+                            <Calendar className="mr-2 h-4 w-4" /> Summary
+                        </TabsTrigger>
+                     ) : null}
                      <TabsTrigger value="reports" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
                          <AreaChart className="mr-2 h-4 w-4" /> Reports
                      </TabsTrigger>
-                     <TabsTrigger value="visualizations" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
-                         <AreaChart className="mr-2 h-4 w-4" /> Visualizations
-                     </TabsTrigger>
+                     {isCurrentUserAdmin ? (
+                        <TabsTrigger value="visualizations" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
+                            <AreaChart className="mr-2 h-4 w-4" /> Visualizations
+                        </TabsTrigger>
+                     ) : null}
                      <TabsTrigger value="policy-search" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
                          <FileSearch className="mr-2 h-4 w-4" /> Policy Search
                      </TabsTrigger>
@@ -437,9 +461,7 @@ export default function Home() {
                      <TabsTrigger value="whole-of-market" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
                          <Building2 className="mr-2 h-4 w-4" /> Whole Of Market
                      </TabsTrigger>
-                     <TabsTrigger value="manage-advisors" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
-                         <Users className="mr-2 h-4 w-4" /> Manage Advisors
-                     </TabsTrigger>
+                     {ManageAdvisorsTrigger}
                  </TabsList>
 
                  <TabsContent value="time-log">
@@ -455,6 +477,7 @@ export default function Home() {
                                  onCancelEdit={handleCancelEdit}
                                  eventToEdit={eventToEdit}
                                  isSubmitting={isProcessingForm}
+                                 currentUserIsAdmin={isCurrentUserAdmin} 
                              />
                          </div>
                          <div className="lg:col-span-2">
@@ -464,22 +487,44 @@ export default function Home() {
                                  onDeleteEvent={handleDeleteEvent}
                                  onEditEvent={handleEditEvent}
                                  deletingId={deletingEventId}
+                                 currentUser={user} 
+                                 currentUserIsAdmin={isCurrentUserAdmin} 
                              />
                          </div>
                      </div>
                  </TabsContent>
 
-                 <TabsContent value="summary">
-                     <TimeLogSummary loggedEvents={loggedEvents} advisors={advisors} />
-                 </TabsContent>
+                {isCurrentUserAdmin ? (
+                    <TabsContent value="summary">
+                        <TimeLogSummary loggedEvents={loggedEvents} advisors={advisors} />
+                    </TabsContent>
+                ) : (
+                    <TabsContent value="summary">
+                        <div className="flex flex-col items-center justify-center p-8 border rounded-md">
+                            <ShieldAlert className="h-12 w-12 text-yellow-500 mb-4" />
+                            <h3 className="text-xl font-semibold mb-2">Access Restricted</h3>
+                            <p className="text-muted-foreground">You do not have permission to view this section.</p>
+                        </div>
+                    </TabsContent>
+                )}
 
                  <TabsContent value="reports">
-                     <ReportSection loggedEvents={loggedEvents} advisors={advisors} />
+                     <ReportSection loggedEvents={loggedEvents} advisors={advisors} currentUserIsAdmin={isCurrentUserAdmin} />
                  </TabsContent>
 
-                 <TabsContent value="visualizations">
-                     <VisualizationsSection loggedEvents={loggedEvents} advisors={advisors} />
-                 </TabsContent>
+                {isCurrentUserAdmin ? (
+                    <TabsContent value="visualizations">
+                        <VisualizationsSection loggedEvents={loggedEvents} advisors={advisors} />
+                    </TabsContent>
+                ) : (
+                    <TabsContent value="visualizations">
+                         <div className="flex flex-col items-center justify-center p-8 border rounded-md">
+                            <ShieldAlert className="h-12 w-12 text-yellow-500 mb-4" />
+                            <h3 className="text-xl font-semibold mb-2">Access Restricted</h3>
+                            <p className="text-muted-foreground">You do not have permission to view this section.</p>
+                        </div>
+                    </TabsContent>
+                )}
 
                  <TabsContent value="policy-search">
                      <PolicySearch
@@ -502,14 +547,17 @@ export default function Home() {
                     <WholeOfMarketSection />
                 </TabsContent>
 
-                 <TabsContent value="manage-advisors">
-                     <AdvisorManager
-                         advisors={advisors}
-                         onAddAdvisor={addAdvisor}
-                         onRemoveAdvisor={removeAdvisor}
-                         onEditAdvisor={editAdvisor}
-                     />
-                 </TabsContent>
+                {isCurrentUserAdmin && (
+                     <TabsContent value="manage-advisors">
+                         <AdvisorManager
+                             advisors={advisors}
+                             onAddAdvisor={addAdvisor}
+                             onRemoveAdvisor={removeAdvisor}
+                             onEditAdvisor={editAdvisor}
+                             currentUserIsAdmin={isCurrentUserAdmin}
+                         />
+                     </TabsContent>
+                )}
              </Tabs>
          )}
        </div>

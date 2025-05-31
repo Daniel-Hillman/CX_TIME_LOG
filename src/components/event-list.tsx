@@ -9,10 +9,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
-import { Trash2, ArrowUpDown, Loader2, Pencil, Search, CalendarCheck, List, ChevronDown, ChevronUp } from 'lucide-react';
+import { Trash2, ArrowUpDown, Loader2, Pencil, Search, CalendarCheck, List, ChevronDown, ChevronUp, EyeOff } from 'lucide-react'; // Added EyeOff
 import { cn } from "@/lib/utils";
 import { TimeLogSummary } from '@/components/time-log-summary';
-import { useToast } from "@/hooks/use-toast";
+// import { useToast } from "@/hooks/use-toast"; // No longer directly used here, consider removing if not needed by sub-components not visible here
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,8 +34,9 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge"; // Import Badge
-import { standardEventTypes } from "@/types"; // Import standardEventTypes for color mapping
+import { Badge } from "@/components/ui/badge";
+import { standardEventTypes } from "@/types";
+import { User } from 'firebase/auth'; // Added User import
 
 const getTodayDateString = (): string => {
     return format(new Date(), 'yyyy-MM-dd');
@@ -47,24 +48,25 @@ interface EventListProps {
   onDeleteEvent: (eventId: string) => Promise<void>;
   onEditEvent: (event: LoggedEvent) => void;
   deletingId: string | null;
+  currentUser: User | null; // Added from page.tsx
+  currentUserIsAdmin: boolean; // Added from page.tsx
 }
 
 type SortCriteria = 'date' | 'advisor' | 'eventType' | 'loggedTime';
 type SortDirection = 'asc' | 'desc';
 
-// Define a color map for event types
 const eventTypeColorMap: Record<StandardEventType | string, string> = {
   "Meeting": "bg-blue-500 hover:bg-blue-600",
   "Training": "bg-green-500 hover:bg-green-600",
   "Doctor": "bg-red-500 hover:bg-red-600",
   "Dentist": "bg-purple-500 hover:bg-purple-600",
-  "Family care": "bg-yellow-500 hover:bg-yellow-600 text-black", // Ensure text is visible on yellow
+  "Family care": "bg-yellow-500 hover:bg-yellow-600 text-black",
   "Learning": "bg-indigo-500 hover:bg-indigo-600",
   "Exam/Study": "bg-pink-500 hover:bg-pink-600",
   "Task work": "bg-teal-500 hover:bg-teal-600",
   "Charity": "bg-orange-500 hover:bg-orange-600",
   "Other": "bg-gray-500 hover:bg-gray-600",
-  "default": "bg-gray-400 hover:bg-gray-500", // Default for any other types
+  "default": "bg-gray-400 hover:bg-gray-500",
 };
 
 const getEventTypeColor = (eventType: StandardEventType | string): string => {
@@ -78,7 +80,9 @@ export function EventList({
     advisors,
     onDeleteEvent,
     onEditEvent,
-    deletingId
+    deletingId,
+    currentUser,
+    currentUserIsAdmin
 }: EventListProps) {
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -87,8 +91,8 @@ export function EventList({
   const [sortCriteria, setSortCriteria] = useState<SortCriteria>('date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [showOnlyToday, setShowOnlyToday] = useState<boolean>(false);
-  const [expandedEventId, setExpandedEventId] = useState<string | null>(null); // For Read More
-  const { toast } = useToast();
+  const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
+  // const { toast } = useToast(); // No direct toasts in this component currently
 
   const advisorMap = useMemo(() => {
     return advisors.reduce((map, advisor) => {
@@ -129,17 +133,23 @@ export function EventList({
             const advisorName = advisorMap[event.advisorId]?.toLowerCase() || '';
             const eventType = event.eventType?.toLowerCase() || '';
             const eventDetails = event.eventDetails?.toLowerCase() || '';
+            
+            // Modify search to respect comment visibility for non-admins
+            const canViewCommentForSearch = currentUserIsAdmin || (event.userId === currentUser?.uid);
+            const searchableEventDetails = canViewCommentForSearch ? eventDetails : "";
+
             return (
               advisorName.includes(lowerCaseSearchTerm) ||
               eventType.includes(lowerCaseSearchTerm) ||
-              eventDetails.includes(lowerCaseSearchTerm)
+              (event.eventType === 'Other' && searchableEventDetails.includes(lowerCaseSearchTerm)) || // Only search 'Other' details if visible
+              (event.eventType !== 'Other' && eventType.includes(lowerCaseSearchTerm)) // For non-'Other', search eventType
             );
           });
         }
     } 
 
     return filtered;
-  }, [events, dateRange, selectedAdvisorId, searchTerm, advisorMap, showOnlyToday]);
+  }, [events, dateRange, selectedAdvisorId, searchTerm, advisorMap, showOnlyToday, currentUser, currentUserIsAdmin]);
 
   const sortedEvents = useMemo(() => {
      if (!Array.isArray(filteredEvents)) return [];
@@ -173,16 +183,19 @@ export function EventList({
   }, [filteredEvents, sortCriteria, sortDirection, advisorMap]);
 
    const getEventDisplayTitle = (event: LoggedEvent): string => {
-      // This function is used for delete confirmation, keep it simple or use a fixed field.
       if (event.eventType === 'Other' && event.eventDetails) {
-          return `Other (${event.eventDetails.substring(0, 30)}${event.eventDetails.length > 30 ? '...' : ''})`;
+          const canViewComment = currentUserIsAdmin || (event.userId === currentUser?.uid);
+          if (canViewComment) {
+            return `Other (${event.eventDetails.substring(0, 30)}${event.eventDetails.length > 30 ? '...' : ''})`;
+          }
+          return 'Other [comment hidden]';
       }
       return typeof event.eventType === 'string' ? event.eventType : 'Unknown Event';
    };
 
   const handleDelete = async (event: LoggedEvent) => {
     if (deletingId) return;
-    const displayTitle = getEventDisplayTitle(event);
+    // const displayTitle = getEventDisplayTitle(event); // Already captured in AlertDialog
     try {
         await onDeleteEvent(event.id);
     } catch (error) { console.error("Error calling onDeleteEvent from EventList:", error); }
@@ -190,6 +203,9 @@ export function EventList({
 
   const handleEdit = (event: LoggedEvent) => {
       if (deletingId) return;
+      // Add permission check for editing: only own events or admin edits any?
+      // For now, assuming if they can see it and edit button is there, they can edit.
+      // This might need to be tied to the same logic as comment visibility or be more specific.
       onEditEvent(event);
   }
 
@@ -289,10 +305,12 @@ export function EventList({
                 ) : (
                     sortedEvents.map((event) => {
                         const isDeletingThis = deletingId === event.id;
-                        const displayTitle = getEventDisplayTitle(event);
+                        const displayTitle = getEventDisplayTitle(event); // Updated to reflect hidden comments
                         const isExpanded = expandedEventId === event.id;
                         const eventDetails = event.eventDetails || "";
                         const isLongDetails = event.eventType === 'Other' && eventDetails.length > TRUNCATE_LENGTH;
+
+                        const canViewComment = currentUserIsAdmin || (currentUser && event.userId === currentUser.uid);
 
                         return (
                         <TableRow key={event.id} className={cn(isDeletingThis && "opacity-50")}>
@@ -300,17 +318,23 @@ export function EventList({
                             <TableCell>{advisorMap[event.advisorId] || 'Unknown Advisor'}</TableCell>
                             <TableCell>
                                 <div>
-                                    <Badge className={cn("text-white", getEventTypeColor(event.eventType))}>                                    
+                                    <Badge className={cn("text-white", getEventTypeColor(event.eventType as StandardEventType))}>                                    
                                       {typeof event.eventType === 'string' ? event.eventType : 'N/A'}
                                     </Badge>
                                     {event.eventType === 'Other' && event.eventDetails && (
                                         <div className="mt-1 text-xs text-muted-foreground">
-                                            {isExpanded ? event.eventDetails : `${event.eventDetails.substring(0, TRUNCATE_LENGTH)}${isLongDetails ? '...' : ''}`}
-                                            {isLongDetails && (
-                                                <Button variant="link" size="xs" className="p-0 h-auto ml-1 text-blue-500" onClick={() => setExpandedEventId(isExpanded ? null : event.id)}>
-                                                    {isExpanded ? 'Read less' : 'Read more'}
-                                                    {isExpanded ? <ChevronUp className="h-3 w-3 ml-1" /> : <ChevronDown className="h-3 w-3 ml-1" />}
-                                                </Button>
+                                            {canViewComment ? (
+                                                <>
+                                                    {isExpanded ? event.eventDetails : `${event.eventDetails.substring(0, TRUNCATE_LENGTH)}${isLongDetails ? '...' : ''}`}
+                                                    {isLongDetails && (
+                                                        <Button variant="link" size="xs" className="p-0 h-auto ml-1 text-blue-500" onClick={() => setExpandedEventId(isExpanded ? null : event.id)}>
+                                                            {isExpanded ? 'Read less' : 'Read more'}
+                                                            {isExpanded ? <ChevronUp className="h-3 w-3 ml-1" /> : <ChevronDown className="h-3 w-3 ml-1" />}
+                                                        </Button>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <span className="italic flex items-center"><EyeOff className="h-3 w-3 mr-1 text-gray-400" /> Comment hidden</span>
                                             )}
                                         </div>
                                     )}
@@ -318,7 +342,14 @@ export function EventList({
                             </TableCell>
                             <TableCell className="text-right">{event.loggedTime || 0} min</TableCell>
                             <TableCell className="text-right space-x-1">
-                                <Button variant="ghost" size="icon" className="text-primary hover:bg-primary/10 h-8 w-8" onClick={() => handleEdit(event)} disabled={!!deletingId} aria-label="Edit Event"> <Pencil className="h-4 w-4" /> </Button>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="text-primary hover:bg-primary/10 h-8 w-8" onClick={() => handleEdit(event)} disabled={!!deletingId} aria-label="Edit Event">
+                                            <Pencil className="h-4 w-4" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent><p>Edit Event</p></TooltipContent>
+                                </Tooltip>
                                 <AlertDialog>
                                     <AlertDialogTrigger asChild>
                                         <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 h-8 w-8" disabled={!!deletingId} aria-label="Delete Event">
@@ -326,10 +357,15 @@ export function EventList({
                                         </Button>
                                     </AlertDialogTrigger>
                                     <AlertDialogContent>
-                                        <AlertDialogHeader> <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle> <AlertDialogDescription> This action cannot be undone. This will permanently delete the event: "<span className="font-semibold">{displayTitle}</span>". </AlertDialogDescription> </AlertDialogHeader>
+                                        <AlertDialogHeader>
+                                             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                             <AlertDialogDescription> This action cannot be undone. This will permanently delete the event: "<span className="font-semibold">{displayTitle}</span>". </AlertDialogDescription>
+                                        </AlertDialogHeader>
                                         <AlertDialogFooter>
                                             <AlertDialogCancel disabled={isDeletingThis}>Cancel</AlertDialogCancel>
-                                            <AlertDialogAction onClick={() => handleDelete(event)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={isDeletingThis}> {isDeletingThis ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Delete </AlertDialogAction>
+                                            <AlertDialogAction onClick={() => handleDelete(event)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={isDeletingThis}>
+                                                 {isDeletingThis ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Delete
+                                            </AlertDialogAction>
                                         </AlertDialogFooter>
                                     </AlertDialogContent>
                                 </AlertDialog>
@@ -342,6 +378,12 @@ export function EventList({
             </Table>
             </ScrollArea>
             <div className='mt-8'>
+                {/* 
+                    Decide if TimeLogSummary should also be admin-only or filter its data based on user. 
+                    For now, it receives all sortedEvents. If it contains sensitive comment summaries, 
+                    it might need `currentUser` and `currentUserIsAdmin` props as well.
+                    Based on initial request, Summary TAB is admin-only, so this component is fine as is.
+                */}
                 <TimeLogSummary loggedEvents={sortedEvents} advisors={advisors} />
             </div>
         </CardContent>

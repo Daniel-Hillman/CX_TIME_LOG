@@ -26,7 +26,7 @@ const designer = localFont({
 });
 
 export const metadata: Metadata = {
-  title: 'Tempo', 
+  title: 'TEMPO', 
   description: 'Track your time effectively', 
 };
 
