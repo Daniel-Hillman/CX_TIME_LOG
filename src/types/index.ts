@@ -19,23 +19,19 @@ export type StandardEventType = typeof standardEventTypes[number];
 
 // Represents an advisor entity, typically associated with logged events.
 export type Advisor = {
-  id: string; // Unique identifier for the advisor.
-  userId: string; // Identifier of the user who manages this advisor.
+  id: string; // Unique identifier for the advisor document in Firestore.
   name: string; // Display name of the advisor.
+  email: string; // Email address of the advisor, used for pre-approval and login.
+  status: 'pending' | 'active'; // Status of the advisor's account.
+  addedByAdminUid: string; // Firebase UID of the admin who added this advisor.
+  firebaseUid?: string; // Firebase UID of the advisor after they successfully sign up.
 };
 
-// Removed Task type definition
-// export type Task = { ... };
-
 // Represents a single logged event or time entry.
-// Note: eventType from Firestore might initially be 'string',
-// but should ideally conform to StandardEventType after validation/processing.
 export type LoggedEvent = {
   id: string; // Unique identifier for the event.
   userId: string; // Identifier of the user who logged the event.
   advisorId: string; // Identifier of the advisor the event is associated with.
-  // Removed taskId field
-  // taskId?: string | null;
   date: string; // Date of the event (ISO string format: YYYY-MM-DD).
   eventType: StandardEventType | string; // Type of event, ideally predefined but allow string for flexibility from DB.
   eventDetails?: string | null; // Optional additional details about the event.

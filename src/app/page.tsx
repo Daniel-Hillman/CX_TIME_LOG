@@ -3,21 +3,21 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
-import { auth, db } from '@/lib/firebase'; // Import db for Firestore
+import { auth, db } from '@/lib/firebase';
 import {
-  collection, // Function to get a collection reference
-  query, // Function to create a query
-  // where, // We are fetching all data, so where clause isn't needed *yet*
-  addDoc, // Function to add a new document
-  updateDoc, // Function to update an existing document
-  deleteDoc, // Function to delete a document
-  doc, // Function to get a document reference
-  onSnapshot, // Function for real-time updates
-  Timestamp, // Firestore Timestamp type
-  writeBatch // Function for atomic batch writes
+  collection,
+  query,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  Timestamp,
+  writeBatch,
+  where,
+  getDocs
 } from "firebase/firestore";
 
-// UI Components
 import {
   Tabs,
   TabsContent,
@@ -30,23 +30,20 @@ import { AdvisorManager } from '@/components/advisor-manager';
 import { EventList } from '@/components/event-list';
 import { TimeLogForm } from '@/components/time-log-form';
 import { TimeLogSummary } from '@/components/time-log-summary';
-// import { ExportVisualizationLayout } from '@/components/export-visualization-layout'; // Not currently used
 import { ReportSection } from '@/components/report-section';
 import { VisualizationsSection } from '@/components/visualizations-section';
 import { PolicySearch } from '@/components/policy-search';
 import NextClearedBatch from '@/components/next-cleared-batch';
-import { WholeOfMarketSection } from '@/components/whole-of-market-section'; // Import new section
+import { WholeOfMarketSection } from '@/components/whole-of-market-section';
 import { LoginForm } from '@/components/auth/login-form';
 import { SignUpForm } from '@/components/auth/signup-form';
 import { Button } from '@/components/ui/button';
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, Clock, Users, AreaChart, FileSearch, FileCheck2, LogOut, Loader2, Building2, ShieldAlert } from 'lucide-react'; // Added Building2 and ShieldAlert
+import { Calendar, Clock, Users, AreaChart, FileSearch, FileCheck2, LogOut, Loader2, Building2, ShieldAlert } from 'lucide-react';
 
-// Types
 import { Advisor, LoggedEvent, StandardEventType, standardEventTypes } from '@/types';
 import { PolicyDataMap } from '@/components/policy-search';
 
-// --- Constants for Firestore Collection Names ---
 const ADVISORS_COLLECTION = 'advisors';
 const EVENTS_COLLECTION = 'loggedEvents';
 
@@ -95,18 +92,15 @@ export default function Home() {
       return;
     }
 
-    console.log("User logged in, fetching Firestore data...");
     setIsLoadingData(true);
 
     const advisorsQuery = query(collection(db, ADVISORS_COLLECTION));
     const unsubscribeAdvisors = onSnapshot(advisorsQuery, (querySnapshot) => {
       const advisorsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Advisor));
       setAdvisors(advisorsData);
-      console.log("Advisors fetched: ", advisorsData.length);
     }, (error) => {
         console.error("Error fetching advisors: ", error);
         toast({ variant: "destructive", title: "Error", description: "Could not fetch advisors." });
-        setIsLoadingData(false);
     });
 
     const eventsQuery = query(collection(db, EVENTS_COLLECTION));
@@ -118,18 +112,15 @@ export default function Home() {
               ...data,
               timestamp: (data.timestamp as Timestamp)?.toDate().toISOString() ?? new Date().toISOString(),
               date: data.date,
-          } as LoggedEvent; // Initial cast
+          } as LoggedEvent;
 
-           // Validate eventType before setting state
            if (!event.eventType || !standardEventTypes.includes(event.eventType as StandardEventType)) {
-            console.warn('Event with id ' + event.id + ' has invalid eventType: ' + event.eventType + '. Setting to "Other".');
             event.eventType = 'Other';
           }
-          return event as LoggedEvent & { eventType: StandardEventType }; // Assert after validation
+          return event as LoggedEvent & { eventType: StandardEventType };
       });
       setLoggedEvents(eventsData);
-      setIsLoadingData(false);
-      console.log("Events fetched: ", eventsData.length);
+      setIsLoadingData(false); // Moved here to ensure data is loaded before setting false
     }, (error) => {
         console.error("Error fetching logged events: ", error);
         toast({ variant: "destructive", title: "Error", description: "Could not fetch time logs." });
@@ -137,7 +128,6 @@ export default function Home() {
     });
 
     return () => {
-      console.log("Cleaning up Firestore listeners.");
       unsubscribeAdvisors();
       unsubscribeEvents();
     };
@@ -146,7 +136,6 @@ export default function Home() {
 
   const handleEditEvent = useCallback((event: LoggedEvent) => {
     if (typeof event.eventType !== 'string' || !standardEventTypes.includes(event.eventType as StandardEventType)) {
-        console.warn('Attempting to edit event with non-standard type: ' + event.eventType + '. Treating as "Other".');
         setEventToEdit({ ...event, eventType: 'Other' });
     } else {
          setEventToEdit(event as LoggedEvent & { eventType: StandardEventType });
@@ -187,12 +176,14 @@ export default function Home() {
     try {
       const newEvent = {
         ...eventData,
-        userId: user.uid, 
+        userId: user.uid,
         timestamp: Timestamp.fromDate(new Date()),
       };
       await addDoc(collection(db, EVENTS_COLLECTION), newEvent);
+      toast({ title: "Success", description: "Time logged successfully."});
     } catch (error) {
       console.error("Error adding time log: ", error);
+      toast({ variant: "destructive", title: "Error", description: "Failed to log time." });
     } finally {
         setIsProcessingForm(false);
     }
@@ -231,67 +222,101 @@ export default function Home() {
           }
 
           await updateDoc(eventRef, dataToUpdate);
+          toast({ title: "Success", description: "Event updated successfully." });
           setEventToEdit(null);
       } catch (error) {
           console.error("Error editing log entry: ", error);
+          toast({ variant: "destructive", title: "Error", description: "Failed to update event." });
       } finally {
           setIsProcessingForm(false);
       }
   }, [user, toast]);
 
 
-  const addAdvisor = useCallback(async (name: string) => {
+  const addAdvisor = useCallback(async (name: string, email: string) => {
     if (!user) {
-        return;
+        toast({ variant: "destructive", title: "Authentication Error", description: "You must be logged in." });
+        throw new Error("Not authenticated");
     }
     if (!isCurrentUserAdmin) {
         toast({
             variant: "destructive",
             title: "Permission Denied",
-            description: "You do not have permission to add users.",
+            description: "You do not have permission to add advisors.",
         });
         throw new Error("Permission Denied");
     }
     const trimmedName = name.trim();
+    const trimmedEmail = email.trim().toLowerCase();
+
+    if (!trimmedEmail.endsWith('@clark.io')) {
+         toast({ variant: "destructive", title: "Invalid Email", description: "Email must end with @clark.io." });
+         throw new Error("Invalid email domain");
+    }
+
+    // Check if email already exists
+    const emailQuery = query(collection(db, ADVISORS_COLLECTION), where("email", "==", trimmedEmail));
+    const emailQuerySnapshot = await getDocs(emailQuery);
+    if (!emailQuerySnapshot.empty) {
+        toast({ variant: "destructive", title: "Duplicate Email", description: "An advisor with this email already exists." });
+        throw new Error("Duplicate email");
+    }
+
+    // Check if name already exists
+    const nameQuery = query(collection(db, ADVISORS_COLLECTION), where("name", "==", trimmedName));
+    const nameQuerySnapshot = await getDocs(nameQuery);
+    if (!nameQuerySnapshot.empty) {
+        toast({ variant: "destructive", title: "Duplicate Name", description: "An advisor with this name already exists." });
+        throw new Error("Duplicate name");
+    }
+
     try {
-        const newAdvisor = { name: trimmedName, userId: user.uid }; 
+        const newAdvisor: Omit<Advisor, 'id' | 'firebaseUid'> = {
+            name: trimmedName,
+            email: trimmedEmail,
+            status: 'pending',
+            addedByAdminUid: user.uid,
+        };
         await addDoc(collection(db, ADVISORS_COLLECTION), newAdvisor);
-        toast({ title: "Success", description: "Advisor '" + trimmedName + "' added." });
+        toast({ title: "Success", description: `Advisor '${trimmedName}' added with email '${trimmedEmail}'. They can now sign up.` });
     } catch (error) {
         console.error("Error adding advisor: ", error);
         toast({ variant: "destructive", title: "Error", description: "Failed to add advisor." });
-        throw error;
+        throw error; // Re-throw to be caught by AdvisorManager
     }
   }, [user, toast, isCurrentUserAdmin]);
 
   const removeAdvisor = useCallback(async (id: string) => {
-    if (!user) {
-      return;
-    }
+    if (!user) { return; }
     if (!isCurrentUserAdmin) {
-        toast({
-            variant: "destructive",
-            title: "Permission Denied",
-            description: "You do not have permission to delete users.",
-        });
-        throw new Error("Permission Denied"); 
+        toast({ variant: "destructive", title: "Permission Denied", description: "You do not have permission to remove advisors." });
+        throw new Error("Permission Denied");
     }
 
     const advisorToRemove = advisors.find(a => a.id === id);
+    if (!advisorToRemove) {
+        toast({ variant: "destructive", title: "Not Found", description: "Advisor not found." });
+        throw new Error("Advisor not found");
+    }
 
-    if (loggedEvents.some(event => event.advisorId === id)) {
+    if (advisorToRemove.status === 'active' && loggedEvents.some(event => event.advisorId === id)) {
         toast({
             variant: "destructive",
             title: "Deletion Failed",
-            description: "Cannot delete advisor '" + (advisorToRemove?.name || 'this advisor') + "' as they have logged time entries. Please reassign or delete the logs first.",
+            description: `Cannot remove active advisor '${advisorToRemove.name}' as they have logged time entries. Please reassign or delete the logs first.`,
             duration: 7000,
         });
-        throw new Error("Advisor has logged events");
+        throw new Error("Active advisor has logged events");
     }
+     if (advisorToRemove.status === 'active' && !loggedEvents.some(event => event.advisorId === id)) {
+         // Allow removing active advisor if they have no logs, but with a warning
+         console.warn(`Admin ${user.email} is removing active advisor ${advisorToRemove.name} (${advisorToRemove.email}) who has no logged events.`);
+     }
+
 
     try {
         await deleteDoc(doc(db, ADVISORS_COLLECTION, id));
-        toast({ title: "Success", description: "Advisor '" + (advisorToRemove?.name || 'Advisor') + "' removed." });
+        toast({ title: "Success", description: `Advisor '${advisorToRemove.name}' removed.` });
     } catch (error) {
         console.error("Error removing advisor: ", error);
         toast({ variant: "destructive", title: "Error", description: "Failed to remove advisor." });
@@ -300,28 +325,72 @@ export default function Home() {
 }, [advisors, loggedEvents, user, toast, isCurrentUserAdmin]);
 
 
-  const editAdvisor = useCallback(async (id: string, newName: string) => {
-    if (!user) {
-      return;
-    }
+  const editAdvisor = useCallback(async (id: string, newName: string, newEmail?: string) => {
+    if (!user) { return; }
     if (!isCurrentUserAdmin) {
-        toast({
-            variant: "destructive",
-            title: "Permission Denied",
-            description: "You do not have permission to edit users.",
-        });
+        toast({ variant: "destructive", title: "Permission Denied", description: "You do not have permission to edit advisors."});
         throw new Error("Permission Denied");
     }
     const trimmedNewName = newName.trim();
+    const trimmedNewEmail = newEmail?.trim().toLowerCase();
+
     const originalAdvisor = advisors.find(a => a.id === id);
+    if (!originalAdvisor) {
+        toast({ variant: "destructive", title: "Not Found", description: "Advisor not found." });
+        throw new Error("Advisor not found");
+    }
+
+    const updateData: Partial<Pick<Advisor, 'name' | 'email'>> = {};
+    if (trimmedNewName !== originalAdvisor.name) {
+        // Check for name duplication
+        const nameQuery = query(collection(db, ADVISORS_COLLECTION), where("name", "==", trimmedNewName), where("id", "!=", id));
+        const nameQuerySnapshot = await getDocs(nameQuery);
+        if (!nameQuerySnapshot.empty) {
+            toast({ variant: "destructive", title: "Duplicate Name", description: `An advisor with the name '${trimmedNewName}' already exists.` });
+            throw new Error("Duplicate name");
+        }
+        updateData.name = trimmedNewName;
+    }
+
+    if (trimmedNewEmail && trimmedNewEmail !== originalAdvisor.email) {
+        if (originalAdvisor.status === 'active') {
+             toast({ variant: "destructive", title: "Update Denied", description: "Email cannot be changed for an active advisor." });
+             throw new Error("Cannot change email for active advisor");
+        }
+        if (!trimmedNewEmail.endsWith('@clark.io')) {
+             toast({ variant: "destructive", title: "Invalid Email", description: "Email must end with @clark.io." });
+             throw new Error("Invalid email domain");
+        }
+        // Check for email duplication
+        const emailQuery = query(collection(db, ADVISORS_COLLECTION), where("email", "==", trimmedNewEmail), where("id", "!=", id));
+        const emailQuerySnapshot = await getDocs(emailQuery);
+        if (!emailQuerySnapshot.empty) {
+            toast({ variant: "destructive", title: "Duplicate Email", description: `An advisor with the email '${trimmedNewEmail}' already exists.` });
+            throw new Error("Duplicate email");
+        }
+        updateData.email = trimmedNewEmail;
+    }
+
+    if (Object.keys(updateData).length === 0) {
+        toast({ title: "No Changes", description: "No changes detected." });
+        return; // No actual changes to make
+    }
 
     try {
         const advisorRef = doc(db, ADVISORS_COLLECTION, id);
-        await updateDoc(advisorRef, { name: trimmedNewName });
-        toast({ title: "Success", description: "Advisor '" + (originalAdvisor?.name || 'Advisor') + "' renamed to '" + trimmedNewName + "'." });
+        await updateDoc(advisorRef, updateData);
+        let successMessage = "Advisor details updated.";
+        if (updateData.name && updateData.email) {
+            successMessage = `Advisor '${originalAdvisor.name}' renamed to '${updateData.name}' and email updated to '${updateData.email}'.`;
+        } else if (updateData.name) {
+            successMessage = `Advisor '${originalAdvisor.name}' renamed to '${updateData.name}'.`;
+        } else if (updateData.email) {
+             successMessage = `Advisor '${originalAdvisor.name}' email updated to '${updateData.email}'.`;
+        }
+        toast({ title: "Success", description: successMessage });
     } catch (error) {
         console.error("Error editing advisor: ", error);
-        toast({ variant: "destructive", title: "Error", description: "Failed to rename advisor." });
+        toast({ variant: "destructive", title: "Error", description: "Failed to update advisor." });
         throw error;
     }
 }, [advisors, user, toast, isCurrentUserAdmin]);
@@ -332,18 +401,14 @@ export default function Home() {
       return;
     }
     if (!isCurrentUserAdmin) {
-        toast({
-            variant: "destructive",
-            title: "Permission Denied",
-            description: "You do not have permission to clear all logs.",
-        });
+        toast({ variant: "destructive", title: "Permission Denied", description: "You do not have permission to clear all logs." });
         return;
     }
     if (loggedEvents.length === 0) {
         toast({ variant: "default", title: "Info", description: "There are no time logs to clear." });
         return;
     }
-    console.warn("User " + user.email + " (Admin: " + isCurrentUserAdmin + ") initiated Clear All Logs. Deleting " + loggedEvents.length + " entries...");
+
     try {
         const batch = writeBatch(db);
         loggedEvents.forEach(event => {
@@ -362,9 +427,8 @@ export default function Home() {
     try {
       await signOut(auth);
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
-      setLoggedEvents([]);
-      setAdvisors([]);
-      setEventToEdit(null);
+      // No need to clear local state here as `onAuthStateChanged` will trigger a re-render
+      // which will clear data in its `useEffect` when user becomes null.
     } catch (error) {
       console.error("Logout Error:", error);
       toast({ variant: "destructive", title: "Logout Failed", description: "An error occurred during logout." });
@@ -396,19 +460,13 @@ export default function Home() {
                 <div className="flex flex-col items-center space-y-4 w-full">
                     {showLogin ? <LoginForm /> : <SignUpForm />}
                     <Button variant="link" onClick={() => setShowLogin(!showLogin)}>
-                    {showLogin ? "Need an account? Sign Up (@clark.io only)" : "Already have an account? Login"}
+                    {showLogin ? "Need an account? Sign Up" : "Already have an account? Login"}
                     </Button>
                 </div>
              </div>
         </ThemeProvider>
     );
   }
-
-  const ManageAdvisorsTrigger = isCurrentUserAdmin ? (
-    <TabsTrigger value="manage-advisors" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
-        <Users className="mr-2 h-4 w-4" /> Manage Advisors
-    </TabsTrigger>
-  ) : null;
 
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
@@ -461,14 +519,18 @@ export default function Home() {
                      <TabsTrigger value="whole-of-market" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
                          <Building2 className="mr-2 h-4 w-4" /> Whole Of Market
                      </TabsTrigger>
-                     {ManageAdvisorsTrigger}
+                     {isCurrentUserAdmin && (
+                        <TabsTrigger value="manage-advisors" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
+                            <Users className="mr-2 h-4 w-4" /> Manage Advisors
+                        </TabsTrigger>
+                     )}
                  </TabsList>
 
                  <TabsContent value="time-log">
                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                          <div className="lg:col-span-1">
                              <TimeLogForm
-                                 advisors={advisors}
+                                 advisors={advisors.filter(a => a.status === 'active')} // Only show active advisors for logging
                                  onLogEvent={addTimeLog}
                                  onUpdateEvent={(eventId, eventData) => {
                                       const fullEventData = { ...eventData, id: eventId };
@@ -477,7 +539,6 @@ export default function Home() {
                                  onCancelEdit={handleCancelEdit}
                                  eventToEdit={eventToEdit}
                                  isSubmitting={isProcessingForm}
-                                 currentUserIsAdmin={isCurrentUserAdmin} 
                              />
                          </div>
                          <div className="lg:col-span-2">
@@ -487,8 +548,8 @@ export default function Home() {
                                  onDeleteEvent={handleDeleteEvent}
                                  onEditEvent={handleEditEvent}
                                  deletingId={deletingEventId}
-                                 currentUser={user} 
-                                 currentUserIsAdmin={isCurrentUserAdmin} 
+                                 currentUser={user}
+                                 currentUserIsAdmin={isCurrentUserAdmin}
                              />
                          </div>
                      </div>
@@ -509,7 +570,7 @@ export default function Home() {
                 )}
 
                  <TabsContent value="reports">
-                     <ReportSection loggedEvents={loggedEvents} advisors={advisors} currentUserIsAdmin={isCurrentUserAdmin} />
+                     <ReportSection loggedEvents={loggedEvents} advisors={advisors} />
                  </TabsContent>
 
                 {isCurrentUserAdmin ? (
@@ -554,7 +615,6 @@ export default function Home() {
                              onAddAdvisor={addAdvisor}
                              onRemoveAdvisor={removeAdvisor}
                              onEditAdvisor={editAdvisor}
-                             currentUserIsAdmin={isCurrentUserAdmin}
                          />
                      </TabsContent>
                 )}
