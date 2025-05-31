@@ -17,6 +17,20 @@ export const standardEventTypes = [
 // This allows ensuring that variables or parameters can only hold one of these specific string values.
 export type StandardEventType = typeof standardEventTypes[number];
 
+// Defines the structure for advisor permissions
+export type AdvisorPermissions = {
+  canAccessTimeLog: boolean;
+  canAccessPolicySearch: boolean;
+  canAccessNextClearedBatch: boolean;
+  canAccessWholeOfMarket: boolean;
+  canAccessIntelligentMessaging: boolean;
+  canAccessVisualisations: boolean;
+  canAccessSummary: boolean;
+  canAccessReports: boolean;
+  canManageAdvisors: boolean;
+  hasTopAccess: boolean;
+};
+
 // Represents an advisor entity, typically associated with logged events.
 export type Advisor = {
   id: string; // Unique identifier for the advisor document in Firestore.
@@ -25,6 +39,7 @@ export type Advisor = {
   status: 'pending' | 'active'; // Status of the advisor's account.
   addedByAdminUid: string; // Firebase UID of the admin who added this advisor.
   firebaseUid?: string; // Firebase UID of the advisor after they successfully sign up.
+  permissions: AdvisorPermissions; // Permissions for the advisor
 };
 
 // Represents a single logged event or time entry.

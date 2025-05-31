@@ -42,6 +42,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Calendar, Clock, Users, AreaChart, FileSearch, FileCheck2, LogOut, Loader2, Building2, ShieldAlert } from 'lucide-react';
 
 import { Advisor, LoggedEvent, StandardEventType, standardEventTypes } from '@/types';
+import type { AdvisorPermissions } from '@/types'; 
+import { addAdvisor as addAdvisorService, updateAdvisorPermissions } from '@/lib/firestoreService'; 
 import { PolicyDataMap } from '@/components/policy-search';
 
 const ADVISORS_COLLECTION = 'advisors';
@@ -120,7 +122,7 @@ export default function Home() {
           return event as LoggedEvent & { eventType: StandardEventType };
       });
       setLoggedEvents(eventsData);
-      setIsLoadingData(false); // Moved here to ensure data is loaded before setting false
+      setIsLoadingData(false); 
     }, (error) => {
         console.error("Error fetching logged events: ", error);
         toast({ variant: "destructive", title: "Error", description: "Could not fetch time logs." });
@@ -234,17 +236,23 @@ export default function Home() {
 
 
   const addAdvisor = useCallback(async (name: string, email: string) => {
+    console.log("Attempting to add advisor. Current auth UID:", auth.currentUser?.uid); // DIAGNOSTIC
     if (!user) {
-        toast({ variant: "destructive", title: "Authentication Error", description: "You must be logged in." });
-        throw new Error("Not authenticated");
+        toast({ variant: "destructive", title: "Authentication Error", description: "You must be logged in (user state is null)." });
+        throw new Error("Not authenticated (user state is null)");
     }
-    if (!isCurrentUserAdmin) {
+    if (auth.currentUser?.uid !== user.uid) { // DIAGNOSTIC
+        console.error("CRITICAL: auth.currentUser.uid MISMATCH with user state UID! auth.currentUser.uid:", auth.currentUser?.uid, "user.uid:", user.uid);
+        toast({ variant: "destructive", title: "Auth Mismatch", description: "Critical authentication state mismatch."});
+        throw new Error("Critical auth mismatch");
+    }
+    if (!isCurrentUserAdmin) { // This currently relies on ADMIN_USERS array
         toast({
             variant: "destructive",
             title: "Permission Denied",
-            description: "You do not have permission to add advisors.",
+            description: "You do not have permission to add advisors (isCurrentUserAdmin is false).",
         });
-        throw new Error("Permission Denied");
+        throw new Error("Permission Denied (isCurrentUserAdmin is false)");
     }
     const trimmedName = name.trim();
     const trimmedEmail = email.trim().toLowerCase();
@@ -254,7 +262,6 @@ export default function Home() {
          throw new Error("Invalid email domain");
     }
 
-    // Check if email already exists
     const emailQuery = query(collection(db, ADVISORS_COLLECTION), where("email", "==", trimmedEmail));
     const emailQuerySnapshot = await getDocs(emailQuery);
     if (!emailQuerySnapshot.empty) {
@@ -262,7 +269,6 @@ export default function Home() {
         throw new Error("Duplicate email");
     }
 
-    // Check if name already exists
     const nameQuery = query(collection(db, ADVISORS_COLLECTION), where("name", "==", trimmedName));
     const nameQuerySnapshot = await getDocs(nameQuery);
     if (!nameQuerySnapshot.empty) {
@@ -271,18 +277,17 @@ export default function Home() {
     }
 
     try {
-        const newAdvisor: Omit<Advisor, 'id' | 'firebaseUid'> = {
-            name: trimmedName,
-            email: trimmedEmail,
-            status: 'pending',
-            addedByAdminUid: user.uid,
-        };
-        await addDoc(collection(db, ADVISORS_COLLECTION), newAdvisor);
+        console.log("Client-side UID before calling addAdvisorService (from user.uid):", user.uid); // DIAGNOSTIC
+        await addAdvisorService({ 
+            name: trimmedName, 
+            email: trimmedEmail, 
+            addedByAdminUid: user.uid 
+        });
         toast({ title: "Success", description: `Advisor '${trimmedName}' added with email '${trimmedEmail}'. They can now sign up.` });
-    } catch (error) {
-        console.error("Error adding advisor: ", error);
-        toast({ variant: "destructive", title: "Error", description: "Failed to add advisor." });
-        throw error; // Re-throw to be caught by AdvisorManager
+    } catch (error: any) {
+        console.error("Error in addAdvisor try block:", error);
+        toast({ variant: "destructive", title: "Error Adding Advisor", description: error.message || "Failed to add advisor." });
+        throw error; 
     }
   }, [user, toast, isCurrentUserAdmin]);
 
@@ -309,7 +314,6 @@ export default function Home() {
         throw new Error("Active advisor has logged events");
     }
      if (advisorToRemove.status === 'active' && !loggedEvents.some(event => event.advisorId === id)) {
-         // Allow removing active advisor if they have no logs, but with a warning
          console.warn(`Admin ${user.email} is removing active advisor ${advisorToRemove.name} (${advisorToRemove.email}) who has no logged events.`);
      }
 
@@ -342,7 +346,6 @@ export default function Home() {
 
     const updateData: Partial<Pick<Advisor, 'name' | 'email'>> = {};
     if (trimmedNewName !== originalAdvisor.name) {
-        // Check for name duplication
         const nameQuery = query(collection(db, ADVISORS_COLLECTION), where("name", "==", trimmedNewName), where("id", "!=", id));
         const nameQuerySnapshot = await getDocs(nameQuery);
         if (!nameQuerySnapshot.empty) {
@@ -361,7 +364,6 @@ export default function Home() {
              toast({ variant: "destructive", title: "Invalid Email", description: "Email must end with @clark.io." });
              throw new Error("Invalid email domain");
         }
-        // Check for email duplication
         const emailQuery = query(collection(db, ADVISORS_COLLECTION), where("email", "==", trimmedNewEmail), where("id", "!=", id));
         const emailQuerySnapshot = await getDocs(emailQuery);
         if (!emailQuerySnapshot.empty) {
@@ -373,7 +375,7 @@ export default function Home() {
 
     if (Object.keys(updateData).length === 0) {
         toast({ title: "No Changes", description: "No changes detected." });
-        return; // No actual changes to make
+        return; 
     }
 
     try {
@@ -394,6 +396,33 @@ export default function Home() {
         throw error;
     }
 }, [advisors, user, toast, isCurrentUserAdmin]);
+
+  const handleUpdatePermissions = useCallback(async (advisorId: string, permissionsToUpdate: Partial<AdvisorPermissions>) => {
+    if (!user) {
+        toast({ variant: "destructive", title: "Authentication Error", description: "You must be logged in." });
+        throw new Error("Not authenticated");
+    }
+    if (!isCurrentUserAdmin) { 
+        toast({
+            variant: "destructive",
+            title: "Permission Denied",
+            description: "You do not have permission to update advisor permissions.",
+        });
+        throw new Error("Permission Denied to update permissions");
+    }
+
+    try {
+        await updateAdvisorPermissions(advisorId, permissionsToUpdate);
+    } catch (error: any) {
+        console.error("Error updating advisor permissions from page.tsx: ", error);
+        toast({
+            variant: "destructive",
+            title: "Update Failed",
+            description: error.message || "Failed to update advisor permissions.",
+        });
+        throw error; 
+    }
+  }, [user, toast, isCurrentUserAdmin]);
 
   const clearAllLogs = useCallback(async () => {
     if (!user) {
@@ -427,14 +456,13 @@ export default function Home() {
     try {
       await signOut(auth);
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
-      // No need to clear local state here as `onAuthStateChanged` will trigger a re-render
-      // which will clear data in its `useEffect` when user becomes null.
     } catch (error) {
       console.error("Logout Error:", error);
       toast({ variant: "destructive", title: "Logout Failed", description: "An error occurred during logout." });
     }
   };
 
+  console.log("Page.tsx: handleUpdatePermissions type:", typeof handleUpdatePermissions); // Existing debug line
 
   if (isLoadingAuth) {
     return (
@@ -530,7 +558,7 @@ export default function Home() {
                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                          <div className="lg:col-span-1">
                              <TimeLogForm
-                                 advisors={advisors.filter(a => a.status === 'active')} // Only show active advisors for logging
+                                 advisors={advisors.filter(a => a.status === 'active')} 
                                  onLogEvent={addTimeLog}
                                  onUpdateEvent={(eventId, eventData) => {
                                       const fullEventData = { ...eventData, id: eventId };
@@ -610,11 +638,13 @@ export default function Home() {
 
                 {isCurrentUserAdmin && (
                      <TabsContent value="manage-advisors">
+                        {console.log("Rendering AdvisorManager, onUpdateAdvisorPermissions type:", typeof handleUpdatePermissions)} {/* ADDED CONSOLE LOG */}
                          <AdvisorManager
                              advisors={advisors}
                              onAddAdvisor={addAdvisor}
                              onRemoveAdvisor={removeAdvisor}
                              onEditAdvisor={editAdvisor}
+                             onUpdateAdvisorPermissions={handleUpdatePermissions} 
                          />
                      </TabsContent>
                 )}

@@ -1,14 +1,14 @@
 
 'use client';
 
-import type { Advisor } from '@/types';
+import type { Advisor, AdvisorPermissions } from '@/types'; // Added AdvisorPermissions
 import * as React from 'react';
 import { useState, useRef, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Trash2, UserPlus, Loader2, Pencil, Mail, ShieldCheck, ShieldAlert } from 'lucide-react'; // Added Mail, ShieldCheck, ShieldAlert
+import { Trash2, UserPlus, Loader2, Pencil, Mail, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from "@/lib/utils";
 import {
@@ -23,29 +23,65 @@ import {
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Badge } from '@/components/ui/badge';
-
+import { Switch } from "@/components/ui/switch"; // Added Switch import
+import { Label } from "@/components/ui/label";   // Added Label import
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"; // Ensure TooltipProvider if not already global
 
 interface AdvisorManagerProps {
   advisors: Advisor[];
-  onAddAdvisor: (name: string, email: string) => Promise<void>; // Updated to accept email
+  onAddAdvisor: (name: string, email: string) => Promise<void>;
   onRemoveAdvisor: (id: string) => Promise<void>;
-  onEditAdvisor: (id: string, newName: string, newEmail?: string) => Promise<void>; // Allow email editing
+  onEditAdvisor: (id: string, newName: string, newEmail?: string) => Promise<void>;
+  onUpdateAdvisorPermissions: (advisorId: string, permissions: Partial<AdvisorPermissions>) => Promise<void>; // New prop
 }
 
-export function AdvisorManager({ advisors, onAddAdvisor, onRemoveAdvisor, onEditAdvisor }: AdvisorManagerProps) {
+const permissionLabels: { [K in keyof AdvisorPermissions]?: string } = {
+    canAccessTimeLog: "Time Log",
+    canAccessPolicySearch: "Policy Search",
+    canAccessNextClearedBatch: "Next Cleared Batch",
+    canAccessWholeOfMarket: "Whole of Market",
+    canAccessIntelligentMessaging: "Intelligent Messaging",
+    canAccessVisualisations: "Visualisations",
+    canAccessSummary: "Summary",
+    canAccessReports: "Reports",
+    canManageAdvisors: "Manage Advisors",
+    hasTopAccess: "Top Access (Grants All)",
+};
+
+const defaultPermissionKeys: (keyof AdvisorPermissions)[] = [
+    'canAccessTimeLog',
+    'canAccessPolicySearch',
+    'canAccessNextClearedBatch',
+    'canAccessWholeOfMarket',
+    'canAccessIntelligentMessaging'
+];
+
+const advancedPermissionKeys: (keyof AdvisorPermissions)[] = [
+    'canAccessVisualisations',
+    'canAccessSummary',
+    'canAccessReports',
+    'canManageAdvisors'
+];
+
+export function AdvisorManager({
+  advisors,
+  onAddAdvisor,
+  onRemoveAdvisor,
+  onEditAdvisor,
+  onUpdateAdvisorPermissions
+}: AdvisorManagerProps) {
   const [newAdvisorName, setNewAdvisorName] = useState('');
-  const [newAdvisorEmail, setNewAdvisorEmail] = useState(''); // State for new advisor's email
+  const [newAdvisorEmail, setNewAdvisorEmail] = useState('');
   const [editingAdvisorId, setEditingAdvisorId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
-  const [editingEmail, setEditingEmail] = useState(''); // State for editing advisor's email
-  const [isLoading, setIsLoading] = useState(false);
+  const [editingEmail, setEditingEmail] = useState('');
+  const [isLoading, setIsLoading] = useState(false); // This can be used for permission updates too
   const [removingId, setRemovingId] = useState<string | null>(null);
   const { toast } = useToast();
   const addNameInputRef = useRef<HTMLInputElement>(null);
-  const addEmailInputRef = useRef<HTMLInputElement>(null); // Ref for email input
+  const addEmailInputRef = useRef<HTMLInputElement>(null);
   const editNameInputRef = useRef<HTMLInputElement>(null);
   const editEmailInputRef = useRef<HTMLInputElement>(null);
-
 
   useEffect(() => {
     if (!isLoading && !editingAdvisorId && addNameInputRef.current) {
@@ -59,6 +95,21 @@ export function AdvisorManager({ advisors, onAddAdvisor, onRemoveAdvisor, onEdit
       }
   }, [editingAdvisorId]);
 
+  const handlePermissionChange = async (advisorId: string, permissionKey: keyof AdvisorPermissions, checked: boolean) => {
+    setIsLoading(true);
+    try {
+      await onUpdateAdvisorPermissions(advisorId, { [permissionKey]: checked });
+      toast({
+        title: "Permissions Updated",
+        description: `Permission '${permissionLabels[permissionKey] || permissionKey}' for advisor has been ${checked ? 'enabled' : 'disabled'}.`,
+      });
+    } catch (caughtError: any) {
+      console.error("Error updating permissions:", caughtError);
+      toast({ title: "Error", description: caughtError.message || "Failed to update permissions.", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleAdd = async () => {
     if (isLoading || editingAdvisorId) return;
@@ -98,7 +149,6 @@ export function AdvisorManager({ advisors, onAddAdvisor, onRemoveAdvisor, onEdit
       setNewAdvisorEmail('');
     } catch (error: any) {
       console.error("Error adding advisor:", error);
-      // Toast is handled by parent, but if specific error message exists from onAddAdvisor
       if (error.message) {
         toast({ title: "Error", description: error.message, variant: "destructive" });
       } else {
@@ -196,6 +246,7 @@ export function AdvisorManager({ advisors, onAddAdvisor, onRemoveAdvisor, onEdit
     };
 
   return (
+    <TooltipProvider> {/* Added TooltipProvider for context */} 
     <Card className="w-full shadow-lg">
       <CardHeader>
         <CardTitle className="text-xl font-semibold text-primary">Manage Advisors</CardTitle>
@@ -237,18 +288,18 @@ export function AdvisorManager({ advisors, onAddAdvisor, onRemoveAdvisor, onEdit
           </Button>
         </div>
 
-        <ScrollArea className="h-[280px] border rounded-md p-2 bg-secondary/30">
+        <ScrollArea className="h-[calc(100vh-450px)] min-h-[280px] border rounded-md p-2 bg-secondary/30">
           {advisors.length === 0 ? (
              <p className="text-center text-muted-foreground p-4">No advisors added yet.</p>
           ) : (
-            <ul className="space-y-2">
+            <ul className="space-y-3">
               {advisors.map((advisor) => {
                 const isRemovingThis = removingId === advisor.id;
                 const isEditingThis = editingAdvisorId === advisor.id;
-                const isSomeoneLoading = isLoading && !isRemovingThis && !isEditingThis;
+                const currentPermissions = advisor.permissions || {} as AdvisorPermissions;
 
                 return (
-                   <li key={advisor.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 bg-background rounded shadow-sm group">
+                   <li key={advisor.id} className="p-3 bg-background rounded shadow-sm group space-y-2">
                      {isEditingThis ? (
                         <div className="flex-grow space-y-2 sm:space-y-0 sm:flex sm:items-center sm:gap-2 mr-2 w-full mb-2 sm:mb-0">
                             <Input
@@ -275,80 +326,113 @@ export function AdvisorManager({ advisors, onAddAdvisor, onRemoveAdvisor, onEdit
                         </div>
                      ) : (
                         <>
-                            <div className="flex-grow mb-2 sm:mb-0">
-                                <div className="flex items-center">
-                                    <span className={cn("text-foreground font-medium", (isRemovingThis || isSomeoneLoading) && "opacity-50")}>
-                                        {advisor.name}
-                                    </span>
-                                    {advisor.status === 'active' ? (
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
+                                <div className="flex-grow mb-2 sm:mb-0">
+                                    <div className="flex items-center">
+                                        <span className={cn("text-foreground font-medium", (isRemovingThis || (isLoading && !isEditingThis)) && "opacity-50")}>
+                                            {advisor.name}
+                                        </span>
                                         <Tooltip>
                                             <TooltipTrigger asChild>
-                                                <ShieldCheck className="ml-2 h-4 w-4 text-green-500" />
+                                                {advisor.status === 'active' ? 
+                                                    <ShieldCheck className="ml-2 h-4 w-4 text-green-500" /> :
+                                                    <ShieldAlert className="ml-2 h-4 w-4 text-yellow-500" />
+                                                }
                                             </TooltipTrigger>
-                                            <TooltipContent><p>Active</p></TooltipContent>
+                                            <TooltipContent><p>{advisor.status === 'active' ? 'Active' : 'Pending Sign-up'}</p></TooltipContent>
                                         </Tooltip>
-                                    ) : (
-                                         <Tooltip>
-                                            <TooltipTrigger asChild>
-                                                <ShieldAlert className="ml-2 h-4 w-4 text-yellow-500" />
-                                            </TooltipTrigger>
-                                            <TooltipContent><p>Pending Sign-up</p></TooltipContent>
-                                        </Tooltip>
-                                    )}
+                                    </div>
+                                    <div className="flex items-center text-xs text-muted-foreground mt-1">
+                                        <Mail className="mr-1.5 h-3 w-3" />
+                                        {advisor.email}
+                                    </div>
                                 </div>
-                                <div className="flex items-center text-xs text-muted-foreground mt-1">
-                                     <Mail className="mr-1.5 h-3 w-3" />
-                                    {advisor.email}
-                                </div>
-                            </div>
-                            <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity self-start sm:self-center">
-                               <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => startEditing(advisor)}
-                                  aria-label={`Edit ${advisor.name}`}
-                                  className="text-primary hover:bg-primary/10 h-7 w-7"
-                                  disabled={isLoading || !!editingAdvisorId}
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                                <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                        <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        aria-label={`Remove ${advisor.name}`}
-                                        className="text-destructive hover:bg-destructive/10 h-7 w-7"
-                                        disabled={isLoading || !!editingAdvisorId}
-                                        >
-                                        {isRemovingThis ? (
-                                            <Loader2 className="h-4 w-4 animate-spin" />
-                                        ) : (
-                                            <Trash2 className="h-4 w-4" />
-                                        )}
-                                        </Button>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                            <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                                Are you sure you want to remove advisor '{advisor.name}' ({advisor.email})?
+                                <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity self-start sm:self-center">
+                                   <Button variant="ghost" size="icon" onClick={() => startEditing(advisor)} aria-label={`Edit ${advisor.name}`} className="text-primary hover:bg-primary/10 h-7 w-7" disabled={isLoading || !!editingAdvisorId}>
+                                      <Pencil className="h-4 w-4" />
+                                    </Button>
+                                    <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                            <Button variant="ghost" size="icon" aria-label={`Remove ${advisor.name}`} className="text-destructive hover:bg-destructive/10 h-7 w-7" disabled={isLoading || !!editingAdvisorId}>
+                                            {isRemovingThis ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                                            </Button>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent>
+                                            <AlertDialogHeader><AlertDialogTitle>Confirm Deletion</AlertDialogTitle><AlertDialogDescription>
+                                                Are you sure you want to remove advisor '${advisor.name}' ({advisor.email})?
                                                 {advisor.status === 'active' && " This advisor has an active account."}
                                                 This action cannot be undone.
-                                            </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                            <AlertDialogCancel disabled={isLoading}>Cancel</AlertDialogCancel>
-                                            <AlertDialogAction
-                                                onClick={() => handleRemove(advisor.id)}
-                                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                                disabled={isLoading}>
-                                                {isRemovingThis ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                                                Delete
-                                            </AlertDialogAction>
-                                        </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                </AlertDialog>
+                                            </AlertDialogDescription></AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                                <AlertDialogCancel disabled={isLoading}>Cancel</AlertDialogCancel>
+                                                <AlertDialogAction onClick={() => handleRemove(advisor.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={isLoading}>
+                                                    {isRemovingThis ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Delete
+                                                </AlertDialogAction>
+                                            </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                    </AlertDialog>
+                                </div>
+                            </div>
+                            {/* Permissions Section */}
+                            <div className="mt-3 pt-3 border-t border-border/40">
+                                <div className="flex items-center space-x-3 mb-2">
+                                    <Switch
+                                        id={`top-access-${advisor.id}`}
+                                        checked={!!currentPermissions.hasTopAccess}
+                                        onCheckedChange={(checked) => handlePermissionChange(advisor.id, 'hasTopAccess', checked)}
+                                        disabled={isLoading}
+                                    />
+                                    <Label htmlFor={`top-access-${advisor.id}`} className="font-semibold text-sm">{permissionLabels.hasTopAccess}</Label>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 pl-4 border-l border-border/40 ml-2">
+                                    {defaultPermissionKeys.map(key => {
+                                        const isChecked = !!currentPermissions.hasTopAccess || !!currentPermissions[key];
+                                        const isDisabled = isLoading || !!currentPermissions.hasTopAccess || (!currentPermissions.hasTopAccess && defaultPermissionKeys.includes(key));
+                                        let title = currentPermissions.hasTopAccess ? "Enabled by Top Access" : "Enabled by default for all users.";
+                                        if (currentPermissions.hasTopAccess) title = "Enabled by Top Access";
+                                        else if (defaultPermissionKeys.includes(key)) title = "Enabled by default for all users.";
+
+                                        return (
+                                            <div key={key} className="flex items-center space-x-2">
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <Switch
+                                                            id={`${key}-${advisor.id}`}
+                                                            checked={isChecked}
+                                                            disabled={isDisabled}
+                                                            onCheckedChange={(checked) => handlePermissionChange(advisor.id, key, checked)}
+                                                        />
+                                                    </TooltipTrigger>
+                                                    {title && <TooltipContent><p>{title}</p></TooltipContent>}
+                                                </Tooltip>
+                                                <Label htmlFor={`${key}-${advisor.id}`} className="text-xs">{permissionLabels[key] || key}</Label>
+                                            </div>
+                                        );
+                                    })}
+                                    {advancedPermissionKeys.map(key => {
+                                        const isChecked = !!currentPermissions.hasTopAccess || !!currentPermissions[key];
+                                        const isDisabled = isLoading || !!currentPermissions.hasTopAccess;
+                                        let title = currentPermissions.hasTopAccess ? "Enabled by Top Access" : "Toggleable advanced permission";
+                                        if (currentPermissions.hasTopAccess) title = "Enabled by Top Access";
+
+                                        return (
+                                            <div key={key} className="flex items-center space-x-2">
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <Switch
+                                                            id={`${key}-${advisor.id}`}
+                                                            checked={isChecked}
+                                                            disabled={isDisabled}
+                                                            onCheckedChange={(checked) => handlePermissionChange(advisor.id, key, checked)}
+                                                        />
+                                                    </TooltipTrigger>
+                                                    {title && <TooltipContent><p>{title}</p></TooltipContent>}
+                                                </Tooltip>
+                                                <Label htmlFor={`${key}-${advisor.id}`} className="text-xs">{permissionLabels[key] || key}</Label>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </div>
                        </>
                      )}
@@ -363,6 +447,7 @@ export function AdvisorManager({ advisors, onAddAdvisor, onRemoveAdvisor, onEdit
         Total Advisors: {advisors.length}
       </CardFooter>
     </Card>
+    </TooltipProvider>
   );
 }
 
