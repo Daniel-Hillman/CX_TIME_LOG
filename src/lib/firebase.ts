@@ -4,20 +4,17 @@ import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 // Removed unused getAnalytics import
 
-// Replace with your actual Firebase configuration for 'cx-time-log-fresh'
+// Your web app's Firebase configuration FOR 'cx-time-log-fresh'
+// IMPORTANT: Ensure these values are correct for your 'cx-time-log-fresh' project.
+// Obtain them from your Firebase project settings (Project settings > General > Your apps > Web app).
 const firebaseConfig = {
-  // !!! IMPORTANT: YOU MUST REPLACE THE apiKey BELOW !!!
-  // !!! Get this from your 'cx-time-log-fresh' project settings in the Firebase Console !!!
-  apiKey: "AIzaSyCsFa7KggnpF86Jr11d35bmehbvmyLogu0", // <<< REPLACE THIS
-  authDomain: "cx-time-log-fresh.firebaseapp.com", // Updated based on new projectId
-  projectId: "cx-time-log-fresh", // <<< Updated to new project ID
-  storageBucket: "cx-time-log-fresh.appspot.com", // Updated based on new projectId
-
-  // !!! IMPORTANT: YOU MUST REPLACE THE messagingSenderId, appId, and measurementId BELOW !!!
-  // !!! Get these from your 'cx-time-log-fresh' project settings in the Firebase Console !!!
-  messagingSenderId: "524802105643", // <<< REPLACE THIS
-  appId: "1:524802105643:web:8987ee74ea52488317656e", // <<< REPLACE THIS
-  measurementId: "G-L9B5HQJ6DW" // <<< REPLACE THIS (if used)
+  apiKey: "YOUR_ACTUAL_API_KEY_FOR_FRESH", // REPLACE THIS
+  authDomain: "cx-time-log-fresh.firebaseapp.com",
+  projectId: "cx-time-log-fresh",
+  storageBucket: "cx-time-log-fresh.appspot.com",
+  messagingSenderId: "YOUR_ACTUAL_MESSAGING_SENDER_ID_FOR_FRESH", // REPLACE THIS
+  appId: "YOUR_ACTUAL_APP_ID_FOR_FRESH", // REPLACE THIS
+  measurementId: "YOUR_ACTUAL_MEASUREMENT_ID_FOR_FRESH" // REPLACE THIS (Optional)
 };
 
 // Initialize Firebase
@@ -26,5 +23,9 @@ const app = initializeApp(firebaseConfig);
 // Initialize Firestore and Auth
 const db = getFirestore(app);
 const auth = getAuth(app);
+
+// If you were using Analytics and want to keep it:
+// import { getAnalytics } from "firebase/analytics";
+// const analytics = getAnalytics(app);
 
 export { db, auth };
