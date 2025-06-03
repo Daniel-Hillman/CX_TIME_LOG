@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { onAuthStateChanged, signOut, User } from 'firebase/auth';
+import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth'; // Renamed User to FirebaseUser to avoid conflict
 import { auth, db } from '@/lib/firebase';
 import {
   collection,
@@ -15,7 +15,8 @@ import {
   Timestamp,
   writeBatch,
   where,
-  getDocs
+  getDocs,
+  getDoc // Added getDoc
 } from "firebase/firestore";
 
 import {
@@ -39,27 +40,30 @@ import { LoginForm } from '@/components/auth/login-form';
 import { SignUpForm } from '@/components/auth/signup-form';
 import { Button } from '@/components/ui/button';
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, Clock, Users, AreaChart, FileSearch, FileCheck2, LogOut, Loader2, Building2, ShieldAlert } from 'lucide-react';
+import { Calendar, Clock, Users, AreaChart, FileSearch, FileCheck2, LogOut, Loader2, Building2, ShieldAlert, Brain } from 'lucide-react'; // Added Brain for Intelligent Messaging
 
-import { Advisor, LoggedEvent, StandardEventType, standardEventTypes } from '@/types';
-import type { AdvisorPermissions } from '@/types'; 
-import { addAdvisor as addAdvisorService, updateAdvisorPermissions } from '@/lib/firestoreService'; 
+import { Advisor, LoggedEvent, StandardEventType, standardEventTypes, AdvisorPermissions } from '@/types';
+import { addAdvisor as addAdvisorService, updateAdvisorPermissions, getDefaultPermissions } from '@/lib/firestoreService';
 import { PolicyDataMap } from '@/components/policy-search';
 
 const ADVISORS_COLLECTION = 'advisors';
 const EVENTS_COLLECTION = 'loggedEvents';
+const USERS_COLLECTION = 'users'; // Collection for user profiles with permissions
 
-const ADMIN_USERS = ['lauren.jackson@clark.io', 'james.smith@clark.io', 'danielhillman94@hotmail.co.uk'];
+// ADMIN_USERS can be kept as a fallback or for initial bootstrap, but permissions should drive access
+const ADMIN_USERS_EMAILS = ['lauren.jackson@clark.io', 'james.smith@clark.io', 'danielhillman94@hotmail.co.uk'];
 
 export default function Home() {
   const { toast } = useToast();
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<FirebaseUser | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [showLogin, setShowLogin] = useState(true);
 
   const [loggedEvents, setLoggedEvents] = useState<LoggedEvent[]>([]);
   const [advisors, setAdvisors] = useState<Advisor[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
+  const [isLoadingPermissions, setIsLoadingPermissions] = useState(true);
+  const [userPermissions, setUserPermissions] = useState<AdvisorPermissions | null>(null);
 
   const [activeTab, setActiveTab] = useState('time-log');
   const [eventToEdit, setEventToEdit] = useState<LoggedEvent | null>(null);
@@ -71,25 +75,56 @@ export default function Home() {
   const [isPolicyLoading, setIsPolicyLoading] = useState<boolean>(false);
   const [policyParseError, setPolicyParseError] = useState<string | null>(null);
 
-  const currentUserEmail = user?.email || '';
-  const isCurrentUserAdmin = ADMIN_USERS.includes(currentUserEmail);
+  // Determine admin status based on fetched permissions or fallback to ADMIN_USERS_EMAILS
+  const isCurrentUserAdmin = userPermissions?.hasTopAccess || (user?.email && ADMIN_USERS_EMAILS.includes(user.email)) || false;
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       setIsLoadingAuth(false);
-      if (!currentUser) {
-          setIsLoadingData(false);
-          setAdvisors([]);
-          setLoggedEvents([]);
-          setEventToEdit(null);
+      if (currentUser) {
+        setIsLoadingPermissions(true);
+        // Try to fetch from 'advisors' collection using firebaseUid (more robust for active advisors)
+        const advisorsQuery = query(collection(db, ADVISORS_COLLECTION), where("firebaseUid", "==", currentUser.uid));
+        const advisorDocs = await getDocs(advisorsQuery);
+
+        if (!advisorDocs.empty) {
+          const advisorData = advisorDocs.docs[0].data() as Advisor;
+          setUserPermissions(advisorData.permissions || getDefaultPermissions());
+        } else {
+          // Fallback: Check 'users' collection if 'advisors' link isn't there or for other user types
+          const userDocRef = doc(db, USERS_COLLECTION, currentUser.uid);
+          const userDocSnap = await getDoc(userDocRef);
+          if (userDocSnap.exists()) {
+            const userProfile = userDocSnap.data();
+            setUserPermissions(userProfile.permissions || getDefaultPermissions());
+          } else {
+            // If still no profile, check if email is in hardcoded admin list for fallback
+            if (currentUser.email && ADMIN_USERS_EMAILS.includes(currentUser.email)) {
+              const adminPerms = getDefaultPermissions();
+              Object.keys(adminPerms).forEach(key => (adminPerms as any)[key] = true); // Grant all if in hardcoded list
+              setUserPermissions(adminPerms);
+            } else {
+              setUserPermissions(getDefaultPermissions()); // Default restricted permissions
+            }
+          }
+        }
+        setIsLoadingPermissions(false);
+      } else {
+        // User is logged out
+        setIsLoadingData(false); // No data to load if no user
+        setIsLoadingPermissions(false);
+        setUserPermissions(null);
+        setAdvisors([]);
+        setLoggedEvents([]);
+        setEventToEdit(null);
       }
     });
-    return () => unsubscribe();
-  }, []);
+    return () => unsubscribeAuth();
+  }, []); // Empty dependency array to run once on mount
 
   useEffect(() => {
-    if (!user) {
+    if (!user || !userPermissions) { // Only fetch data if user is logged in AND permissions are determined (or defaulted)
       setIsLoadingData(false);
       return;
     }
@@ -98,7 +133,7 @@ export default function Home() {
 
     const advisorsQuery = query(collection(db, ADVISORS_COLLECTION));
     const unsubscribeAdvisors = onSnapshot(advisorsQuery, (querySnapshot) => {
-      const advisorsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Advisor));
+      const advisorsData = querySnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Advisor));
       setAdvisors(advisorsData);
     }, (error) => {
         console.error("Error fetching advisors: ", error);
@@ -107,10 +142,10 @@ export default function Home() {
 
     const eventsQuery = query(collection(db, EVENTS_COLLECTION));
     const unsubscribeEvents = onSnapshot(eventsQuery, (querySnapshot) => {
-      const eventsData = querySnapshot.docs.map(doc => {
-          const data = doc.data();
+      const eventsData = querySnapshot.docs.map(docSnap => {
+          const data = docSnap.data();
           const event: LoggedEvent = {
-              id: doc.id,
+              id: docSnap.id,
               ...data,
               timestamp: (data.timestamp as Timestamp)?.toDate().toISOString() ?? new Date().toISOString(),
               date: data.date,
@@ -122,7 +157,7 @@ export default function Home() {
           return event as LoggedEvent & { eventType: StandardEventType };
       });
       setLoggedEvents(eventsData);
-      setIsLoadingData(false); 
+      setIsLoadingData(false);
     }, (error) => {
         console.error("Error fetching logged events: ", error);
         toast({ variant: "destructive", title: "Error", description: "Could not fetch time logs." });
@@ -133,10 +168,16 @@ export default function Home() {
       unsubscribeAdvisors();
       unsubscribeEvents();
     };
-  }, [user, toast]);
+  }, [user, userPermissions, toast]); // Re-run if user or their permissions change
 
 
   const handleEditEvent = useCallback((event: LoggedEvent) => {
+    // Permission check: Can edit own logs, or if admin, can edit any.
+    const canEdit = event.userId === user?.uid || isCurrentUserAdmin;
+    if (!canEdit) {
+        toast({ variant: "destructive", title: "Permission Denied", description: "You cannot edit this log entry." });
+        return;
+    }
     if (typeof event.eventType !== 'string' || !standardEventTypes.includes(event.eventType as StandardEventType)) {
         setEventToEdit({ ...event, eventType: 'Other' });
     } else {
@@ -144,7 +185,7 @@ export default function Home() {
     }
     setActiveTab('time-log');
     document.getElementById('time-log-form-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, []);
+  }, [user, isCurrentUserAdmin, toast]);
 
   const handleCancelEdit = useCallback(() => {
     setEventToEdit(null);
@@ -156,6 +197,13 @@ export default function Home() {
           toast({ variant: "destructive", title: "Error", description: "You must be logged in." });
           return;
       }
+      const eventToDelete = loggedEvents.find(e => e.id === id);
+      const canDelete = eventToDelete?.userId === user.uid || isCurrentUserAdmin;
+      if (!canDelete) {
+          toast({ variant: "destructive", title: "Permission Denied", description: "You cannot delete this log entry." });
+          return;
+      }
+
       setDeletingEventId(id);
       try {
           await deleteDoc(doc(db, EVENTS_COLLECTION, id));
@@ -166,34 +214,40 @@ export default function Home() {
       } finally {
           setDeletingEventId(null);
       }
-  }, [user, toast]);
+  }, [user, loggedEvents, isCurrentUserAdmin, toast]);
 
 
   const addTimeLog = useCallback(async (eventData: Omit<LoggedEvent, 'id' | 'timestamp' | 'userId'>) => {
-    if (!user) {
-        toast({ variant: "destructive", title: "Error", description: "You must be logged in to add logs." });
+    if (!user || !userPermissions?.canAccessTimeLog) {
+        toast({ variant: "destructive", title: "Permission Denied", description: "You do not have permission to log time." });
         return;
     }
     setIsProcessingForm(true);
     try {
       const newEvent = {
         ...eventData,
-        userId: user.uid,
+        userId: user.uid, // Logged by the current authenticated user
         timestamp: Timestamp.fromDate(new Date()),
       };
       await addDoc(collection(db, EVENTS_COLLECTION), newEvent);
       toast({ title: "Success", description: "Time logged successfully."});
+      setEventToEdit(null); // Clear edit form if it was open
     } catch (error) {
       console.error("Error adding time log: ", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to log time." });
     } finally {
         setIsProcessingForm(false);
     }
-  }, [user, toast]);
+  }, [user, userPermissions, toast]);
 
   const editLogEntry = useCallback(async (updatedEvent: LoggedEvent) => {
       if (!user) {
           toast({ variant: "destructive", title: "Error", description: "You must be logged in." });
+          return;
+      }
+      const canEdit = updatedEvent.userId === user.uid || isCurrentUserAdmin;
+      if (!canEdit) {
+          toast({ variant: "destructive", title: "Permission Denied", description: "You cannot edit this log entry." });
           return;
       }
       if (!updatedEvent.id) {
@@ -209,7 +263,7 @@ export default function Home() {
               eventType: updatedEvent.eventType,
               eventDetails: updatedEvent.eventDetails,
               loggedTime: updatedEvent.loggedTime,
-              timestamp: Timestamp.fromDate(new Date()),
+              timestamp: Timestamp.fromDate(new Date()), // Keep userId, it shouldn't change
           };
 
           Object.keys(dataToUpdate).forEach(key => {
@@ -232,28 +286,15 @@ export default function Home() {
       } finally {
           setIsProcessingForm(false);
       }
-  }, [user, toast]);
+  }, [user, isCurrentUserAdmin, toast]);
 
 
   const addAdvisor = useCallback(async (name: string, email: string) => {
-    console.log("Attempting to add advisor. Current auth UID:", auth.currentUser?.uid); // DIAGNOSTIC
-    if (!user) {
-        toast({ variant: "destructive", title: "Authentication Error", description: "You must be logged in (user state is null)." });
-        throw new Error("Not authenticated (user state is null)");
+    if (!user || !(userPermissions?.canManageAdvisors || userPermissions?.hasTopAccess)) {
+        toast({ variant: "destructive", title: "Permission Denied", description: "You do not have permission to add advisors." });
+        throw new Error("Permission Denied");
     }
-    if (auth.currentUser?.uid !== user.uid) { // DIAGNOSTIC
-        console.error("CRITICAL: auth.currentUser.uid MISMATCH with user state UID! auth.currentUser.uid:", auth.currentUser?.uid, "user.uid:", user.uid);
-        toast({ variant: "destructive", title: "Auth Mismatch", description: "Critical authentication state mismatch."});
-        throw new Error("Critical auth mismatch");
-    }
-    if (!isCurrentUserAdmin) { // This currently relies on ADMIN_USERS array
-        toast({
-            variant: "destructive",
-            title: "Permission Denied",
-            description: "You do not have permission to add advisors (isCurrentUserAdmin is false).",
-        });
-        throw new Error("Permission Denied (isCurrentUserAdmin is false)");
-    }
+    // ... rest of the addAdvisor logic remains largely the same
     const trimmedName = name.trim();
     const trimmedEmail = email.trim().toLowerCase();
 
@@ -277,27 +318,25 @@ export default function Home() {
     }
 
     try {
-        console.log("Client-side UID before calling addAdvisorService (from user.uid):", user.uid); // DIAGNOSTIC
-        await addAdvisorService({ 
-            name: trimmedName, 
-            email: trimmedEmail, 
-            addedByAdminUid: user.uid 
+        await addAdvisorService({
+            name: trimmedName,
+            email: trimmedEmail,
+            addedByAdminUid: user.uid
         });
         toast({ title: "Success", description: `Advisor '${trimmedName}' added with email '${trimmedEmail}'. They can now sign up.` });
     } catch (error: any) {
         console.error("Error in addAdvisor try block:", error);
         toast({ variant: "destructive", title: "Error Adding Advisor", description: error.message || "Failed to add advisor." });
-        throw error; 
+        throw error;
     }
-  }, [user, toast, isCurrentUserAdmin]);
+  }, [user, userPermissions, toast]);
 
   const removeAdvisor = useCallback(async (id: string) => {
-    if (!user) { return; }
-    if (!isCurrentUserAdmin) {
+    if (!user || !(userPermissions?.canManageAdvisors || userPermissions?.hasTopAccess)) {
         toast({ variant: "destructive", title: "Permission Denied", description: "You do not have permission to remove advisors." });
         throw new Error("Permission Denied");
     }
-
+    // ... rest of removeAdvisor logic
     const advisorToRemove = advisors.find(a => a.id === id);
     if (!advisorToRemove) {
         toast({ variant: "destructive", title: "Not Found", description: "Advisor not found." });
@@ -317,7 +356,6 @@ export default function Home() {
          console.warn(`Admin ${user.email} is removing active advisor ${advisorToRemove.name} (${advisorToRemove.email}) who has no logged events.`);
      }
 
-
     try {
         await deleteDoc(doc(db, ADVISORS_COLLECTION, id));
         toast({ title: "Success", description: `Advisor '${advisorToRemove.name}' removed.` });
@@ -326,15 +364,15 @@ export default function Home() {
         toast({ variant: "destructive", title: "Error", description: "Failed to remove advisor." });
         throw error;
     }
-}, [advisors, loggedEvents, user, toast, isCurrentUserAdmin]);
+}, [advisors, loggedEvents, user, userPermissions, toast]);
 
 
   const editAdvisor = useCallback(async (id: string, newName: string, newEmail?: string) => {
-    if (!user) { return; }
-    if (!isCurrentUserAdmin) {
+    if (!user || !(userPermissions?.canManageAdvisors || userPermissions?.hasTopAccess)) {
         toast({ variant: "destructive", title: "Permission Denied", description: "You do not have permission to edit advisors."});
         throw new Error("Permission Denied");
     }
+    // ... rest of editAdvisor logic
     const trimmedNewName = newName.trim();
     const trimmedNewEmail = newEmail?.trim().toLowerCase();
 
@@ -375,7 +413,7 @@ export default function Home() {
 
     if (Object.keys(updateData).length === 0) {
         toast({ title: "No Changes", description: "No changes detected." });
-        return; 
+        return;
     }
 
     try {
@@ -395,24 +433,17 @@ export default function Home() {
         toast({ variant: "destructive", title: "Error", description: "Failed to update advisor." });
         throw error;
     }
-}, [advisors, user, toast, isCurrentUserAdmin]);
+  }, [advisors, user, userPermissions, toast]);
 
   const handleUpdatePermissions = useCallback(async (advisorId: string, permissionsToUpdate: Partial<AdvisorPermissions>) => {
-    if (!user) {
-        toast({ variant: "destructive", title: "Authentication Error", description: "You must be logged in." });
-        throw new Error("Not authenticated");
+    if (!user || !(userPermissions?.canManageAdvisors || userPermissions?.hasTopAccess)) {
+        toast({ variant: "destructive", title: "Permission Denied", description: "You do not have permission to update advisor permissions." });
+        throw new Error("Permission Denied");
     }
-    if (!isCurrentUserAdmin) { 
-        toast({
-            variant: "destructive",
-            title: "Permission Denied",
-            description: "You do not have permission to update advisor permissions.",
-        });
-        throw new Error("Permission Denied to update permissions");
-    }
-
     try {
+        // This function updates permissions for OTHER advisors, so it's correct it uses the service.
         await updateAdvisorPermissions(advisorId, permissionsToUpdate);
+         toast({ title: "Permissions Updated", description: "Advisor permissions have been successfully updated."});
     } catch (error: any) {
         console.error("Error updating advisor permissions from page.tsx: ", error);
         toast({
@@ -420,18 +451,14 @@ export default function Home() {
             title: "Update Failed",
             description: error.message || "Failed to update advisor permissions.",
         });
-        throw error; 
+        throw error;
     }
-  }, [user, toast, isCurrentUserAdmin]);
+  }, [user, userPermissions, toast]);
 
   const clearAllLogs = useCallback(async () => {
-    if (!user) {
-      toast({ variant: "destructive", title: "Error", description: "You must be logged in." });
+    if (!user || !isCurrentUserAdmin) { // Or a more specific permission like `userPermissions?.canClearAllLogs`
+      toast({ variant: "destructive", title: "Permission Denied", description: "You do not have permission to clear all logs." });
       return;
-    }
-    if (!isCurrentUserAdmin) {
-        toast({ variant: "destructive", title: "Permission Denied", description: "You do not have permission to clear all logs." });
-        return;
     }
     if (loggedEvents.length === 0) {
         toast({ variant: "default", title: "Info", description: "There are no time logs to clear." });
@@ -450,11 +477,12 @@ export default function Home() {
         console.error("Error clearing all logs: ", error);
         toast({ variant: "destructive", title: "Error", description: "Failed to clear all time logs." });
     }
-  }, [loggedEvents, user, toast, isCurrentUserAdmin]);
+  }, [loggedEvents, user, isCurrentUserAdmin, toast]); // Add userPermissions if using specific perm
 
   const handleLogout = async () => {
     try {
       await signOut(auth);
+      setUserPermissions(null); // Clear permissions on logout
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
     } catch (error) {
       console.error("Logout Error:", error);
@@ -462,13 +490,11 @@ export default function Home() {
     }
   };
 
-  console.log("Page.tsx: handleUpdatePermissions type:", typeof handleUpdatePermissions); // Existing debug line
-
-  if (isLoadingAuth) {
+  if (isLoadingAuth || (user && isLoadingPermissions)) {
     return (
         <div className="flex justify-center items-center min-h-screen">
             <Loader2 className="h-8 w-8 animate-spin mr-2" />
-            Loading Authentication...
+            {isLoadingAuth ? 'Loading Authentication...' : 'Loading User Permissions...'}
         </div>
     );
   }
@@ -495,6 +521,16 @@ export default function Home() {
         </ThemeProvider>
     );
   }
+  // Fallback if permissions are still loading after auth check (should be covered by above, but as a safeguard)
+  if (isLoadingPermissions) {
+      return (
+          <div className="flex justify-center items-center min-h-screen">
+              <Loader2 className="h-8 w-8 animate-spin mr-2" />
+              Loading User Data...
+          </div>
+      );
+  }
+
 
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
@@ -514,51 +550,67 @@ export default function Home() {
              </div>
          </header>
 
-         {isLoadingData ? (
+         {isLoadingData ? ( // isLoadingData is for advisors and events, permissions loaded separately
              <div className="flex justify-center items-center py-10">
                 <Loader2 className="h-6 w-6 animate-spin mr-3" />
-                Loading Data...
+                Loading App Data...
             </div>
          ) : (
              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                  <TabsList className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:flex lg:flex-wrap justify-center gap-2 mb-12 p-1 h-auto">
-                     <TabsTrigger value="time-log" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
-                         <Clock className="mr-2 h-4 w-4" /> Time Log
-                     </TabsTrigger>
-                     {isCurrentUserAdmin ? (
+                     {userPermissions?.canAccessTimeLog && (
+                        <TabsTrigger value="time-log" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
+                            <Clock className="mr-2 h-4 w-4" /> Time Log
+                        </TabsTrigger>
+                     )}
+                     {(userPermissions?.canAccessSummary || isCurrentUserAdmin) && ( // isCurrentUserAdmin as fallback
                         <TabsTrigger value="summary" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
                             <Calendar className="mr-2 h-4 w-4" /> Summary
                         </TabsTrigger>
-                     ) : null}
-                     <TabsTrigger value="reports" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
-                         <AreaChart className="mr-2 h-4 w-4" /> Reports
-                     </TabsTrigger>
-                     {isCurrentUserAdmin ? (
+                     )}
+                     {(userPermissions?.canAccessReports || isCurrentUserAdmin) && (
+                        <TabsTrigger value="reports" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
+                            <AreaChart className="mr-2 h-4 w-4" /> Reports
+                        </TabsTrigger>
+                     )}
+                     {(userPermissions?.canAccessVisualisations || isCurrentUserAdmin) && (
                         <TabsTrigger value="visualizations" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
                             <AreaChart className="mr-2 h-4 w-4" /> Visualizations
                         </TabsTrigger>
-                     ) : null}
-                     <TabsTrigger value="policy-search" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
-                         <FileSearch className="mr-2 h-4 w-4" /> Policy Search
-                     </TabsTrigger>
-                     <TabsTrigger value="next-cleared-batch" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
-                         <FileCheck2 className="mr-2 h-4 w-4" /> Next Cleared Batch
-                     </TabsTrigger>
-                     <TabsTrigger value="whole-of-market" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
-                         <Building2 className="mr-2 h-4 w-4" /> Whole Of Market
-                     </TabsTrigger>
-                     {isCurrentUserAdmin && (
+                     )}
+                      {userPermissions?.canAccessPolicySearch && (
+                        <TabsTrigger value="policy-search" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
+                            <FileSearch className="mr-2 h-4 w-4" /> Policy Search
+                        </TabsTrigger>
+                      )}
+                      {userPermissions?.canAccessNextClearedBatch && (
+                        <TabsTrigger value="next-cleared-batch" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
+                            <FileCheck2 className="mr-2 h-4 w-4" /> Next Cleared Batch
+                        </TabsTrigger>
+                      )}
+                      {userPermissions?.canAccessWholeOfMarket && (
+                        <TabsTrigger value="whole-of-market" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
+                            <Building2 className="mr-2 h-4 w-4" /> Whole Of Market
+                        </TabsTrigger>
+                      )}
+                      {userPermissions?.canAccessIntelligentMessaging && ( // Tab for Intelligent Messaging
+                        <TabsTrigger value="intelligent-messaging" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
+                           <Brain className="mr-2 h-4 w-4" /> IM Compose
+                        </TabsTrigger>
+                      )}
+                     {(userPermissions?.canManageAdvisors || isCurrentUserAdmin) && (
                         <TabsTrigger value="manage-advisors" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
                             <Users className="mr-2 h-4 w-4" /> Manage Advisors
                         </TabsTrigger>
                      )}
                  </TabsList>
 
+                {userPermissions?.canAccessTimeLog ? (
                  <TabsContent value="time-log">
                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                          <div className="lg:col-span-1">
                              <TimeLogForm
-                                 advisors={advisors.filter(a => a.status === 'active')} 
+                                 advisors={advisors.filter(a => a.status === 'active')}
                                  onLogEvent={addTimeLog}
                                  onUpdateEvent={(eventId, eventData) => {
                                       const fullEventData = { ...eventData, id: eventId };
@@ -577,13 +629,23 @@ export default function Home() {
                                  onEditEvent={handleEditEvent}
                                  deletingId={deletingEventId}
                                  currentUser={user}
-                                 currentUserIsAdmin={isCurrentUserAdmin}
+                                 currentUserIsAdmin={isCurrentUserAdmin} // isCurrentUserAdmin (derived from permissions.hasTopAccess or ADMIN_USERS_EMAILS)
                              />
                          </div>
                      </div>
                  </TabsContent>
+                ) : (
+                    <TabsContent value="time-log">
+                         <div className="flex flex-col items-center justify-center p-8 border rounded-md">
+                            <ShieldAlert className="h-12 w-12 text-yellow-500 mb-4" />
+                            <h3 className="text-xl font-semibold mb-2">Access Restricted</h3>
+                            <p className="text-muted-foreground">You do not have permission to view Time Logs.</p>
+                        </div>
+                    </TabsContent>
+                )}
 
-                {isCurrentUserAdmin ? (
+
+                {(userPermissions?.canAccessSummary || isCurrentUserAdmin) ? (
                     <TabsContent value="summary">
                         <TimeLogSummary loggedEvents={loggedEvents} advisors={advisors} />
                     </TabsContent>
@@ -592,16 +654,27 @@ export default function Home() {
                         <div className="flex flex-col items-center justify-center p-8 border rounded-md">
                             <ShieldAlert className="h-12 w-12 text-yellow-500 mb-4" />
                             <h3 className="text-xl font-semibold mb-2">Access Restricted</h3>
-                            <p className="text-muted-foreground">You do not have permission to view this section.</p>
+                            <p className="text-muted-foreground">You do not have permission to view the Summary.</p>
                         </div>
                     </TabsContent>
                 )}
 
-                 <TabsContent value="reports">
-                     <ReportSection loggedEvents={loggedEvents} advisors={advisors} />
-                 </TabsContent>
+                {(userPermissions?.canAccessReports || isCurrentUserAdmin) ? (
+                     <TabsContent value="reports">
+                         <ReportSection loggedEvents={loggedEvents} advisors={advisors} />
+                     </TabsContent>
+                ) : (
+                    <TabsContent value="reports">
+                         <div className="flex flex-col items-center justify-center p-8 border rounded-md">
+                            <ShieldAlert className="h-12 w-12 text-yellow-500 mb-4" />
+                            <h3 className="text-xl font-semibold mb-2">Access Restricted</h3>
+                            <p className="text-muted-foreground">You do not have permission to view Reports.</p>
+                        </div>
+                    </TabsContent>
+                )}
 
-                {isCurrentUserAdmin ? (
+
+                {(userPermissions?.canAccessVisualisations || isCurrentUserAdmin) ? (
                     <TabsContent value="visualizations">
                         <VisualizationsSection loggedEvents={loggedEvents} advisors={advisors} />
                     </TabsContent>
@@ -610,44 +683,102 @@ export default function Home() {
                          <div className="flex flex-col items-center justify-center p-8 border rounded-md">
                             <ShieldAlert className="h-12 w-12 text-yellow-500 mb-4" />
                             <h3 className="text-xl font-semibold mb-2">Access Restricted</h3>
-                            <p className="text-muted-foreground">You do not have permission to view this section.</p>
+                            <p className="text-muted-foreground">You do not have permission to view Visualizations.</p>
                         </div>
                     </TabsContent>
                 )}
 
-                 <TabsContent value="policy-search">
-                     <PolicySearch
-                         policyData={policyData}
-                         setPolicyData={setPolicyData}
-                         fileName={policyFileName}
-                         setFileName={setPolicyFileName}
-                         isLoading={isPolicyLoading}
-                         setIsLoading={setIsPolicyLoading}
-                         parseError={policyParseError}
-                         setParseError={setPolicyParseError}
-                     />
-                 </TabsContent>
+                {userPermissions?.canAccessPolicySearch ? (
+                     <TabsContent value="policy-search">
+                         <PolicySearch
+                             policyData={policyData}
+                             setPolicyData={setPolicyData}
+                             fileName={policyFileName}
+                             setFileName={setPolicyFileName}
+                             isLoading={isPolicyLoading}
+                             setIsLoading={setIsPolicyLoading}
+                             parseError={policyParseError}
+                             setParseError={setPolicyParseError}
+                         />
+                     </TabsContent>
+                 ) : (
+                    <TabsContent value="policy-search">
+                         <div className="flex flex-col items-center justify-center p-8 border rounded-md">
+                            <ShieldAlert className="h-12 w-12 text-yellow-500 mb-4" />
+                            <h3 className="text-xl font-semibold mb-2">Access Restricted</h3>
+                            <p className="text-muted-foreground">You do not have permission to use Policy Search.</p>
+                        </div>
+                    </TabsContent>
+                 )}
 
-                <TabsContent value="next-cleared-batch">
-                    <NextClearedBatch />
-                </TabsContent>
 
-                <TabsContent value="whole-of-market">
-                    <WholeOfMarketSection />
-                </TabsContent>
+                {userPermissions?.canAccessNextClearedBatch ? (
+                    <TabsContent value="next-cleared-batch">
+                        <NextClearedBatch />
+                    </TabsContent>
+                ) : (
+                     <TabsContent value="next-cleared-batch">
+                         <div className="flex flex-col items-center justify-center p-8 border rounded-md">
+                            <ShieldAlert className="h-12 w-12 text-yellow-500 mb-4" />
+                            <h3 className="text-xl font-semibold mb-2">Access Restricted</h3>
+                            <p className="text-muted-foreground">You do not have permission to use Next Cleared Batch.</p>
+                        </div>
+                    </TabsContent>
+                )}
 
-                {isCurrentUserAdmin && (
+
+                {userPermissions?.canAccessWholeOfMarket ? (
+                    <TabsContent value="whole-of-market">
+                        <WholeOfMarketSection />
+                    </TabsContent>
+                 ) : (
+                    <TabsContent value="whole-of-market">
+                         <div className="flex flex-col items-center justify-center p-8 border rounded-md">
+                            <ShieldAlert className="h-12 w-12 text-yellow-500 mb-4" />
+                            <h3 className="text-xl font-semibold mb-2">Access Restricted</h3>
+                            <p className="text-muted-foreground">You do not have permission to view Whole of Market.</p>
+                        </div>
+                    </TabsContent>
+                 )}
+
+                {userPermissions?.canAccessIntelligentMessaging ? (
+                    <TabsContent value="intelligent-messaging">
+                        {/* Placeholder for Intelligent Messaging Component */}
+                        <Card>
+                            <CardHeader><CardTitle>Intelligent Messaging (IM Compose)</CardTitle></CardHeader>
+                            <CardContent><p>Intelligent Messaging feature will be implemented here.</p></CardContent>
+                        </Card>
+                    </TabsContent>
+                 ) : (
+                    <TabsContent value="intelligent-messaging">
+                        <div className="flex flex-col items-center justify-center p-8 border rounded-md">
+                            <ShieldAlert className="h-12 w-12 text-yellow-500 mb-4" />
+                            <h3 className="text-xl font-semibold mb-2">Access Restricted</h3>
+                            <p className="text-muted-foreground">You do not have permission to use Intelligent Messaging.</p>
+                        </div>
+                    </TabsContent>
+                 )}
+
+
+                {(userPermissions?.canManageAdvisors || isCurrentUserAdmin) ? (
                      <TabsContent value="manage-advisors">
-                        {console.log("Rendering AdvisorManager, onUpdateAdvisorPermissions type:", typeof handleUpdatePermissions)} {/* ADDED CONSOLE LOG */}
                          <AdvisorManager
-                             advisors={advisors}
+                             advisors={advisors} // This should be the list of all advisors fetched
                              onAddAdvisor={addAdvisor}
                              onRemoveAdvisor={removeAdvisor}
                              onEditAdvisor={editAdvisor}
-                             onUpdateAdvisorPermissions={handleUpdatePermissions} 
+                             onUpdateAdvisorPermissions={handleUpdatePermissions}
                          />
                      </TabsContent>
-                )}
+                 ) : (
+                    <TabsContent value="manage-advisors">
+                        <div className="flex flex-col items-center justify-center p-8 border rounded-md">
+                            <ShieldAlert className="h-12 w-12 text-yellow-500 mb-4" />
+                            <h3 className="text-xl font-semibold mb-2">Access Restricted</h3>
+                            <p className="text-muted-foreground">You do not have permission to Manage Advisors.</p>
+                        </div>
+                    </TabsContent>
+                 )}
              </Tabs>
          )}
        </div>
