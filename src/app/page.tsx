@@ -16,7 +16,6 @@ import {
   writeBatch,
   where,
   getDocs,
-  // getDoc // No longer needed here as USERS_COLLECTION direct lookup is removed for permissions
 } from "firebase/firestore";
 
 import {
@@ -40,7 +39,7 @@ import { LoginForm } from '@/components/auth/login-form';
 import { SignUpForm } from '@/components/auth/signup-form';
 import { Button } from '@/components/ui/button';
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, Clock, Users, AreaChart, FileSearch, FileCheck2, LogOut, Loader2, Building2, ShieldAlert, Brain } from 'lucide-react'; // Added Brain for Intelligent Messaging
+import { Calendar, Clock, Users, AreaChart, FileSearch, FileCheck2, LogOut, Loader2, Building2, ShieldAlert, Brain } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 
@@ -50,7 +49,6 @@ import { PolicyDataMap } from '@/components/policy-search';
 
 const ADVISORS_COLLECTION = 'advisors';
 const EVENTS_COLLECTION = 'loggedEvents';
-// const USERS_COLLECTION = 'users'; // This was for cloud functions user management, not app permissions for advisors directly from page.tsx
 
 const ADMIN_USERS_EMAILS = ['lauren.jackson@clark.io', 'james.smith@clark.io', 'danielhillman94@hotmail.co.uk'];
 
@@ -81,31 +79,24 @@ export default function Home() {
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
-      setIsLoadingAuth(false); // Auth loading is done
+      setIsLoadingAuth(false);
 
       if (currentUser) {
-        setIsLoadingPermissions(true); // Start loading permissions
+        setIsLoadingPermissions(true);
         try {
-          // Attempt to find the user in the 'advisors' collection by their Firebase UID
           const advisorsQuery = query(collection(db, ADVISORS_COLLECTION), where("firebaseUid", "==", currentUser.uid));
           const advisorDocsSnapshot = await getDocs(advisorsQuery);
 
           if (!advisorDocsSnapshot.empty) {
-            // User found in 'advisors' collection
             const advisorData = advisorDocsSnapshot.docs[0].data() as Advisor;
             setUserPermissions(advisorData.permissions || getDefaultPermissions());
           } else {
-            // User not found in 'advisors' collection by UID.
-            // Check if their email is in the hardcoded admin list.
             if (currentUser.email && ADMIN_USERS_EMAILS.includes(currentUser.email)) {
               const adminPerms = getDefaultPermissions();
-              Object.keys(adminPerms).forEach(key => (adminPerms as any)[key] = true); // Grant all if in hardcoded list
+              Object.keys(adminPerms).forEach(key => (adminPerms as any)[key] = true);
               setUserPermissions(adminPerms);
-              // toast({ title: "Admin Fallback", description: "Using hardcoded admin permissions.", variant: "default" });
             } else {
-              // Not found in advisors, not a hardcoded admin. Give default (restricted) permissions.
               setUserPermissions(getDefaultPermissions());
-              // toast({ title: "Default Permissions Applied", description: "User profile not found or incomplete, applying default access.", variant: "default" });
             }
           }
         } catch (error) {
@@ -115,15 +106,14 @@ export default function Home() {
             title: "Permissions Error",
             description: "Could not load user permissions. Applying default access.",
           });
-          setUserPermissions(getDefaultPermissions()); // Fallback to default permissions on error
+          setUserPermissions(getDefaultPermissions());
         } finally {
-          setIsLoadingPermissions(false); // Ensure this is always called
+          setIsLoadingPermissions(false);
         }
       } else {
-        // User is logged out
         setUser(null);
-        setIsLoadingData(false);
-        setIsLoadingPermissions(false);
+        setIsLoadingData(false); // No data to load if not logged in
+        setIsLoadingPermissions(false); // No permissions to load
         setUserPermissions(null);
         setAdvisors([]);
         setLoggedEvents([]);
@@ -133,23 +123,39 @@ export default function Home() {
       }
     });
     return () => unsubscribeAuth();
-  }, []); // Empty dependency array ensures this runs once on mount and cleans up
+  }, [toast]); // toast is stable, so this effect runs once on mount
 
   useEffect(() => {
     if (!user || !userPermissions) {
-      setIsLoadingData(false);
+      // Clear data if user logs out or permissions are not available yet
+      setAdvisors([]);
+      setLoggedEvents([]);
+      setIsLoadingData(false); // Set to false as there's nothing to load or user is not ready
       return;
     }
 
     setIsLoadingData(true);
+    let advisorsLoadedSuccessfully = false;
+    let eventsLoadedSuccessfully = false;
+
+    const trySetLoadingFalse = () => {
+      // Set loading to false only if both have attempted to load (successfully or with error)
+      if (advisorsLoadedSuccessfully && eventsLoadedSuccessfully) {
+        setIsLoadingData(false);
+      }
+    };
 
     const advisorsQuery = query(collection(db, ADVISORS_COLLECTION));
     const unsubscribeAdvisors = onSnapshot(advisorsQuery, (querySnapshot) => {
       const advisorsData = querySnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Advisor));
       setAdvisors(advisorsData);
+      advisorsLoadedSuccessfully = true;
+      trySetLoadingFalse();
     }, (error) => {
         console.error("Error fetching advisors: ", error);
         toast({ variant: "destructive", title: "Error", description: "Could not fetch advisors." });
+        advisorsLoadedSuccessfully = true; // Mark as "attempted" even on error
+        trySetLoadingFalse();
     });
 
     const eventsQuery = query(collection(db, EVENTS_COLLECTION));
@@ -169,11 +175,13 @@ export default function Home() {
           return event as LoggedEvent & { eventType: StandardEventType };
       });
       setLoggedEvents(eventsData);
-      setIsLoadingData(false);
+      eventsLoadedSuccessfully = true;
+      trySetLoadingFalse();
     }, (error) => {
         console.error("Error fetching logged events: ", error);
         toast({ variant: "destructive", title: "Error", description: "Could not fetch time logs." });
-        setIsLoadingData(false);
+        eventsLoadedSuccessfully = true; // Mark as "attempted" even on error
+        trySetLoadingFalse();
     });
 
     return () => {
@@ -528,7 +536,7 @@ export default function Home() {
         </ThemeProvider>
     );
   }
-  if (isLoadingPermissions) { // Should be caught by the combined check above, but as an extra safeguard
+  if (isLoadingPermissions) {
       return (
           <div className="flex justify-center items-center min-h-screen">
               <Loader2 className="h-8 w-8 animate-spin mr-2" />
@@ -556,7 +564,7 @@ export default function Home() {
              </div>
          </header>
 
-         {isLoadingData && !isLoadingPermissions ? ( // Show data loading only if permissions are loaded but data isn't
+         {isLoadingData ? (
              <div className="flex justify-center items-center py-10">
                 <Loader2 className="h-6 w-6 animate-spin mr-3" />
                 Loading App Data...
