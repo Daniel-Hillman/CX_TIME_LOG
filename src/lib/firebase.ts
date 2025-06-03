@@ -8,13 +8,13 @@ import { getAuth } from "firebase/auth";
 // IMPORTANT: Ensure these values are correct for your 'cx-time-log-fresh' project.
 // Obtain them from your Firebase project settings (Project settings > General > Your apps > Web app).
 const firebaseConfig = {
-  apiKey: "YOUR_ACTUAL_API_KEY_FOR_FRESH", // REPLACE THIS
+  apiKey: "AIzaSyAlwq36m9uk-WLJuWLHX0PBEXdLBKo1pzU",
   authDomain: "cx-time-log-fresh.firebaseapp.com",
   projectId: "cx-time-log-fresh",
-  storageBucket: "cx-time-log-fresh.appspot.com",
-  messagingSenderId: "YOUR_ACTUAL_MESSAGING_SENDER_ID_FOR_FRESH", // REPLACE THIS
-  appId: "YOUR_ACTUAL_APP_ID_FOR_FRESH", // REPLACE THIS
-  measurementId: "YOUR_ACTUAL_MEASUREMENT_ID_FOR_FRESH" // REPLACE THIS (Optional)
+  storageBucket: "cx-time-log-fresh.firebasestorage.app",
+  messagingSenderId: "798718084250",
+  appId: "1:798718084250:web:b5ffcc487ff25a468a8b23",
+  measurementId: "G-584SNNKTTP"
 };
 
 // Initialize Firebase
