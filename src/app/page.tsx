@@ -16,7 +16,7 @@ import {
   writeBatch,
   where,
   getDocs,
-  getDoc // Added getDoc
+  // getDoc // No longer needed here as USERS_COLLECTION direct lookup is removed for permissions
 } from "firebase/firestore";
 
 import {
@@ -41,6 +41,8 @@ import { SignUpForm } from '@/components/auth/signup-form';
 import { Button } from '@/components/ui/button';
 import { useToast } from "@/hooks/use-toast";
 import { Calendar, Clock, Users, AreaChart, FileSearch, FileCheck2, LogOut, Loader2, Building2, ShieldAlert, Brain } from 'lucide-react'; // Added Brain for Intelligent Messaging
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+
 
 import { Advisor, LoggedEvent, StandardEventType, standardEventTypes, AdvisorPermissions } from '@/types';
 import { addAdvisor as addAdvisorService, updateAdvisorPermissions, getDefaultPermissions } from '@/lib/firestoreService';
@@ -48,9 +50,8 @@ import { PolicyDataMap } from '@/components/policy-search';
 
 const ADVISORS_COLLECTION = 'advisors';
 const EVENTS_COLLECTION = 'loggedEvents';
-const USERS_COLLECTION = 'users'; // Collection for user profiles with permissions
+// const USERS_COLLECTION = 'users'; // This was for cloud functions user management, not app permissions for advisors directly from page.tsx
 
-// ADMIN_USERS can be kept as a fallback or for initial bootstrap, but permissions should drive access
 const ADMIN_USERS_EMAILS = ['lauren.jackson@clark.io', 'james.smith@clark.io', 'danielhillman94@hotmail.co.uk'];
 
 export default function Home() {
@@ -75,56 +76,67 @@ export default function Home() {
   const [isPolicyLoading, setIsPolicyLoading] = useState<boolean>(false);
   const [policyParseError, setPolicyParseError] = useState<string | null>(null);
 
-  // Determine admin status based on fetched permissions or fallback to ADMIN_USERS_EMAILS
   const isCurrentUserAdmin = userPermissions?.hasTopAccess || (user?.email && ADMIN_USERS_EMAILS.includes(user.email)) || false;
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
-      setIsLoadingAuth(false);
-      if (currentUser) {
-        setIsLoadingPermissions(true);
-        // Try to fetch from 'advisors' collection using firebaseUid (more robust for active advisors)
-        const advisorsQuery = query(collection(db, ADVISORS_COLLECTION), where("firebaseUid", "==", currentUser.uid));
-        const advisorDocs = await getDocs(advisorsQuery);
+      setIsLoadingAuth(false); // Auth loading is done
 
-        if (!advisorDocs.empty) {
-          const advisorData = advisorDocs.docs[0].data() as Advisor;
-          setUserPermissions(advisorData.permissions || getDefaultPermissions());
-        } else {
-          // Fallback: Check 'users' collection if 'advisors' link isn't there or for other user types
-          const userDocRef = doc(db, USERS_COLLECTION, currentUser.uid);
-          const userDocSnap = await getDoc(userDocRef);
-          if (userDocSnap.exists()) {
-            const userProfile = userDocSnap.data();
-            setUserPermissions(userProfile.permissions || getDefaultPermissions());
+      if (currentUser) {
+        setIsLoadingPermissions(true); // Start loading permissions
+        try {
+          // Attempt to find the user in the 'advisors' collection by their Firebase UID
+          const advisorsQuery = query(collection(db, ADVISORS_COLLECTION), where("firebaseUid", "==", currentUser.uid));
+          const advisorDocsSnapshot = await getDocs(advisorsQuery);
+
+          if (!advisorDocsSnapshot.empty) {
+            // User found in 'advisors' collection
+            const advisorData = advisorDocsSnapshot.docs[0].data() as Advisor;
+            setUserPermissions(advisorData.permissions || getDefaultPermissions());
           } else {
-            // If still no profile, check if email is in hardcoded admin list for fallback
+            // User not found in 'advisors' collection by UID.
+            // Check if their email is in the hardcoded admin list.
             if (currentUser.email && ADMIN_USERS_EMAILS.includes(currentUser.email)) {
               const adminPerms = getDefaultPermissions();
               Object.keys(adminPerms).forEach(key => (adminPerms as any)[key] = true); // Grant all if in hardcoded list
               setUserPermissions(adminPerms);
+              // toast({ title: "Admin Fallback", description: "Using hardcoded admin permissions.", variant: "default" });
             } else {
-              setUserPermissions(getDefaultPermissions()); // Default restricted permissions
+              // Not found in advisors, not a hardcoded admin. Give default (restricted) permissions.
+              setUserPermissions(getDefaultPermissions());
+              // toast({ title: "Default Permissions Applied", description: "User profile not found or incomplete, applying default access.", variant: "default" });
             }
           }
+        } catch (error) {
+          console.error("Error fetching user permissions:", error);
+          toast({
+            variant: "destructive",
+            title: "Permissions Error",
+            description: "Could not load user permissions. Applying default access.",
+          });
+          setUserPermissions(getDefaultPermissions()); // Fallback to default permissions on error
+        } finally {
+          setIsLoadingPermissions(false); // Ensure this is always called
         }
-        setIsLoadingPermissions(false);
       } else {
         // User is logged out
-        setIsLoadingData(false); // No data to load if no user
+        setUser(null);
+        setIsLoadingData(false);
         setIsLoadingPermissions(false);
         setUserPermissions(null);
         setAdvisors([]);
         setLoggedEvents([]);
         setEventToEdit(null);
+        setPolicyData(new Map());
+        setPolicyFileName(null);
       }
     });
     return () => unsubscribeAuth();
-  }, []); // Empty dependency array to run once on mount
+  }, []); // Empty dependency array ensures this runs once on mount and cleans up
 
   useEffect(() => {
-    if (!user || !userPermissions) { // Only fetch data if user is logged in AND permissions are determined (or defaulted)
+    if (!user || !userPermissions) {
       setIsLoadingData(false);
       return;
     }
@@ -168,11 +180,10 @@ export default function Home() {
       unsubscribeAdvisors();
       unsubscribeEvents();
     };
-  }, [user, userPermissions, toast]); // Re-run if user or their permissions change
+  }, [user, userPermissions, toast]);
 
 
   const handleEditEvent = useCallback((event: LoggedEvent) => {
-    // Permission check: Can edit own logs, or if admin, can edit any.
     const canEdit = event.userId === user?.uid || isCurrentUserAdmin;
     if (!canEdit) {
         toast({ variant: "destructive", title: "Permission Denied", description: "You cannot edit this log entry." });
@@ -226,12 +237,12 @@ export default function Home() {
     try {
       const newEvent = {
         ...eventData,
-        userId: user.uid, // Logged by the current authenticated user
+        userId: user.uid,
         timestamp: Timestamp.fromDate(new Date()),
       };
       await addDoc(collection(db, EVENTS_COLLECTION), newEvent);
       toast({ title: "Success", description: "Time logged successfully."});
-      setEventToEdit(null); // Clear edit form if it was open
+      setEventToEdit(null);
     } catch (error) {
       console.error("Error adding time log: ", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to log time." });
@@ -263,7 +274,7 @@ export default function Home() {
               eventType: updatedEvent.eventType,
               eventDetails: updatedEvent.eventDetails,
               loggedTime: updatedEvent.loggedTime,
-              timestamp: Timestamp.fromDate(new Date()), // Keep userId, it shouldn't change
+              timestamp: Timestamp.fromDate(new Date()),
           };
 
           Object.keys(dataToUpdate).forEach(key => {
@@ -294,7 +305,6 @@ export default function Home() {
         toast({ variant: "destructive", title: "Permission Denied", description: "You do not have permission to add advisors." });
         throw new Error("Permission Denied");
     }
-    // ... rest of the addAdvisor logic remains largely the same
     const trimmedName = name.trim();
     const trimmedEmail = email.trim().toLowerCase();
 
@@ -336,7 +346,6 @@ export default function Home() {
         toast({ variant: "destructive", title: "Permission Denied", description: "You do not have permission to remove advisors." });
         throw new Error("Permission Denied");
     }
-    // ... rest of removeAdvisor logic
     const advisorToRemove = advisors.find(a => a.id === id);
     if (!advisorToRemove) {
         toast({ variant: "destructive", title: "Not Found", description: "Advisor not found." });
@@ -372,7 +381,6 @@ export default function Home() {
         toast({ variant: "destructive", title: "Permission Denied", description: "You do not have permission to edit advisors."});
         throw new Error("Permission Denied");
     }
-    // ... rest of editAdvisor logic
     const trimmedNewName = newName.trim();
     const trimmedNewEmail = newEmail?.trim().toLowerCase();
 
@@ -441,7 +449,6 @@ export default function Home() {
         throw new Error("Permission Denied");
     }
     try {
-        // This function updates permissions for OTHER advisors, so it's correct it uses the service.
         await updateAdvisorPermissions(advisorId, permissionsToUpdate);
          toast({ title: "Permissions Updated", description: "Advisor permissions have been successfully updated."});
     } catch (error: any) {
@@ -456,7 +463,7 @@ export default function Home() {
   }, [user, userPermissions, toast]);
 
   const clearAllLogs = useCallback(async () => {
-    if (!user || !isCurrentUserAdmin) { // Or a more specific permission like `userPermissions?.canClearAllLogs`
+    if (!user || !isCurrentUserAdmin) {
       toast({ variant: "destructive", title: "Permission Denied", description: "You do not have permission to clear all logs." });
       return;
     }
@@ -477,12 +484,12 @@ export default function Home() {
         console.error("Error clearing all logs: ", error);
         toast({ variant: "destructive", title: "Error", description: "Failed to clear all time logs." });
     }
-  }, [loggedEvents, user, isCurrentUserAdmin, toast]); // Add userPermissions if using specific perm
+  }, [loggedEvents, user, isCurrentUserAdmin, toast]);
 
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      setUserPermissions(null); // Clear permissions on logout
+      setUserPermissions(null);
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
     } catch (error) {
       console.error("Logout Error:", error);
@@ -521,12 +528,11 @@ export default function Home() {
         </ThemeProvider>
     );
   }
-  // Fallback if permissions are still loading after auth check (should be covered by above, but as a safeguard)
-  if (isLoadingPermissions) {
+  if (isLoadingPermissions) { // Should be caught by the combined check above, but as an extra safeguard
       return (
           <div className="flex justify-center items-center min-h-screen">
               <Loader2 className="h-8 w-8 animate-spin mr-2" />
-              Loading User Data...
+              Loading User Permissions...
           </div>
       );
   }
@@ -550,7 +556,7 @@ export default function Home() {
              </div>
          </header>
 
-         {isLoadingData ? ( // isLoadingData is for advisors and events, permissions loaded separately
+         {isLoadingData && !isLoadingPermissions ? ( // Show data loading only if permissions are loaded but data isn't
              <div className="flex justify-center items-center py-10">
                 <Loader2 className="h-6 w-6 animate-spin mr-3" />
                 Loading App Data...
@@ -563,7 +569,7 @@ export default function Home() {
                             <Clock className="mr-2 h-4 w-4" /> Time Log
                         </TabsTrigger>
                      )}
-                     {(userPermissions?.canAccessSummary || isCurrentUserAdmin) && ( // isCurrentUserAdmin as fallback
+                     {(userPermissions?.canAccessSummary || isCurrentUserAdmin) && (
                         <TabsTrigger value="summary" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
                             <Calendar className="mr-2 h-4 w-4" /> Summary
                         </TabsTrigger>
@@ -593,7 +599,7 @@ export default function Home() {
                             <Building2 className="mr-2 h-4 w-4" /> Whole Of Market
                         </TabsTrigger>
                       )}
-                      {userPermissions?.canAccessIntelligentMessaging && ( // Tab for Intelligent Messaging
+                      {userPermissions?.canAccessIntelligentMessaging && (
                         <TabsTrigger value="intelligent-messaging" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
                            <Brain className="mr-2 h-4 w-4" /> IM Compose
                         </TabsTrigger>
@@ -629,7 +635,7 @@ export default function Home() {
                                  onEditEvent={handleEditEvent}
                                  deletingId={deletingEventId}
                                  currentUser={user}
-                                 currentUserIsAdmin={isCurrentUserAdmin} // isCurrentUserAdmin (derived from permissions.hasTopAccess or ADMIN_USERS_EMAILS)
+                                 currentUserIsAdmin={isCurrentUserAdmin}
                              />
                          </div>
                      </div>
@@ -743,7 +749,6 @@ export default function Home() {
 
                 {userPermissions?.canAccessIntelligentMessaging ? (
                     <TabsContent value="intelligent-messaging">
-                        {/* Placeholder for Intelligent Messaging Component */}
                         <Card>
                             <CardHeader><CardTitle>Intelligent Messaging (IM Compose)</CardTitle></CardHeader>
                             <CardContent><p>Intelligent Messaging feature will be implemented here.</p></CardContent>
@@ -763,7 +768,7 @@ export default function Home() {
                 {(userPermissions?.canManageAdvisors || isCurrentUserAdmin) ? (
                      <TabsContent value="manage-advisors">
                          <AdvisorManager
-                             advisors={advisors} // This should be the list of all advisors fetched
+                             advisors={advisors}
                              onAddAdvisor={addAdvisor}
                              onRemoveAdvisor={removeAdvisor}
                              onEditAdvisor={editAdvisor}
@@ -786,3 +791,5 @@ export default function Home() {
     </ThemeProvider>
   );
 }
+
+    
