@@ -50,7 +50,8 @@ import { PolicyDataMap } from '@/components/policy-search';
 const ADVISORS_COLLECTION = 'advisors';
 const EVENTS_COLLECTION = 'loggedEvents';
 
-const ADMIN_USERS_EMAILS = ['lauren.jackson@clark.io', 'james.smith@clark.io', 'danielhillman94@hotmail.co.uk'];
+// Updated ADMIN_USERS_EMAILS list
+const ADMIN_USERS_EMAILS = ['lauren.jackson@clark.io', 'james.smith@clark.io', 'daniel.hillman@clark.io', 'danielhillman94@hotmail.co.uk'];
 
 export default function Home() {
   const { toast } = useToast();
@@ -74,6 +75,7 @@ export default function Home() {
   const [isPolicyLoading, setIsPolicyLoading] = useState<boolean>(false);
   const [policyParseError, setPolicyParseError] = useState<string | null>(null);
 
+  // isCurrentUserAdmin now correctly prioritizes fetched permissions, then falls back to email list.
   const isCurrentUserAdmin = userPermissions?.hasTopAccess || (user?.email && ADMIN_USERS_EMAILS.includes(user.email)) || false;
 
   useEffect(() => {
@@ -89,11 +91,15 @@ export default function Home() {
 
           if (!advisorDocsSnapshot.empty) {
             const advisorData = advisorDocsSnapshot.docs[0].data() as Advisor;
-            setUserPermissions(advisorData.permissions || getDefaultPermissions());
+            // Ensure permissions are always an object, defaulting if necessary
+            const currentPerms = advisorData.permissions || {};
+            setUserPermissions({ ...getDefaultPermissions(), ...currentPerms });
           } else {
+            // Fallback if no advisor document found for the UID
             if (currentUser.email && ADMIN_USERS_EMAILS.includes(currentUser.email)) {
               const adminPerms = getDefaultPermissions();
               Object.keys(adminPerms).forEach(key => (adminPerms as any)[key] = true);
+              adminPerms.hasTopAccess = true; // Explicitly set for email-based admins
               setUserPermissions(adminPerms);
             } else {
               setUserPermissions(getDefaultPermissions());
@@ -112,8 +118,8 @@ export default function Home() {
         }
       } else {
         setUser(null);
-        setIsLoadingData(false); // No data to load if not logged in
-        setIsLoadingPermissions(false); // No permissions to load
+        setIsLoadingData(false);
+        setIsLoadingPermissions(false);
         setUserPermissions(null);
         setAdvisors([]);
         setLoggedEvents([]);
@@ -123,24 +129,22 @@ export default function Home() {
       }
     });
     return () => unsubscribeAuth();
-  }, [toast]); // toast is stable, so this effect runs once on mount
+  }, [toast]); // toast is stable
 
   useEffect(() => {
     if (!user || !userPermissions) {
-      // Clear data if user logs out or permissions are not available yet
       setAdvisors([]);
       setLoggedEvents([]);
-      setIsLoadingData(false); // Set to false as there's nothing to load or user is not ready
+      setIsLoadingData(false);
       return;
     }
 
     setIsLoadingData(true);
-    let advisorsLoadedSuccessfully = false;
-    let eventsLoadedSuccessfully = false;
+    let advisorsAttemptedLoad = false;
+    let eventsAttemptedLoad = false;
 
     const trySetLoadingFalse = () => {
-      // Set loading to false only if both have attempted to load (successfully or with error)
-      if (advisorsLoadedSuccessfully && eventsLoadedSuccessfully) {
+      if (advisorsAttemptedLoad && eventsAttemptedLoad) {
         setIsLoadingData(false);
       }
     };
@@ -149,12 +153,12 @@ export default function Home() {
     const unsubscribeAdvisors = onSnapshot(advisorsQuery, (querySnapshot) => {
       const advisorsData = querySnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Advisor));
       setAdvisors(advisorsData);
-      advisorsLoadedSuccessfully = true;
+      advisorsAttemptedLoad = true;
       trySetLoadingFalse();
     }, (error) => {
         console.error("Error fetching advisors: ", error);
         toast({ variant: "destructive", title: "Error", description: "Could not fetch advisors." });
-        advisorsLoadedSuccessfully = true; // Mark as "attempted" even on error
+        advisorsAttemptedLoad = true;
         trySetLoadingFalse();
     });
 
@@ -175,12 +179,12 @@ export default function Home() {
           return event as LoggedEvent & { eventType: StandardEventType };
       });
       setLoggedEvents(eventsData);
-      eventsLoadedSuccessfully = true;
+      eventsAttemptedLoad = true;
       trySetLoadingFalse();
     }, (error) => {
         console.error("Error fetching logged events: ", error);
         toast({ variant: "destructive", title: "Error", description: "Could not fetch time logs." });
-        eventsLoadedSuccessfully = true; // Mark as "attempted" even on error
+        eventsAttemptedLoad = true;
         trySetLoadingFalse();
     });
 
@@ -536,7 +540,7 @@ export default function Home() {
         </ThemeProvider>
     );
   }
-  if (isLoadingPermissions) {
+  if (isLoadingPermissions) { // This check might be redundant due to the combined check above, but safe to keep
       return (
           <div className="flex justify-center items-center min-h-screen">
               <Loader2 className="h-8 w-8 animate-spin mr-2" />
