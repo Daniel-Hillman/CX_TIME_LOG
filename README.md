@@ -92,7 +92,6 @@ Tempo is a comprehensive web application designed to assist employees with time 
 -   **Frontend:** Next.js, React, TypeScript
 -   **UI Library:** ShadCN UI, Tailwind CSS
 -   **Backend & Database:** Firebase (Authentication, Firestore)
--   **Generative AI (Future/Planned):** Genkit (setup initiated in `src/ai/`)
 
 ## Getting Started
 (Instructions for local setup, development, and deployment would typically go here if this were a public repository. For internal use, this section might cover specific setup notes for team members.)
