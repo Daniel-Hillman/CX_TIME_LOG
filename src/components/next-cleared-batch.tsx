@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -254,7 +253,7 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
         return;
       }
 
-      Papa.parse(dashboardDataText, {
+      Papa.parse(dashboardDataText as any, {
         header: true,
         skipEmptyLines: true,
         complete: (results) => {
@@ -303,7 +302,8 @@ const NextClearedBatch: React.FC<NextClearedBatchProps> = () => {
             toast({ title: "No Matches Found", description: "No policies from the dashboard matched the cleared batch OR met the 'next payment cleared' criteria.", variant: "default" });
           }
         },
-        error: (error) => {
+        transformHeader: (header: string) => header.trim(),
+        onError: (error: Papa.ParseError) => {
           console.error("Error parsing dashboard CSV:", error);
           toast({ title: "Parsing Error", description: `Failed to parse dashboard CSV: ${error.message}`, variant: "destructive" });
         }
