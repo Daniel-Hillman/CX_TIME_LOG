@@ -1,4 +1,3 @@
-
 // src/lib/firestoreService.ts
 import { doc, getDoc, setDoc, addDoc, collection, updateDoc, getDocs, query, where } from "firebase/firestore";
 import { db } from "./firebase";
@@ -10,7 +9,7 @@ export const getDefaultPermissions = (): AdvisorPermissions => ({
   canAccessPolicySearch: true,
   canAccessNextClearedBatch: true,
   canAccessWholeOfMarket: true,
-  canAccessIntelligentMessaging: true,
+  canAccessAgentTools: true,
   canAccessVisualisations: false,
   canAccessSummary: false,
   canAccessReports: false,

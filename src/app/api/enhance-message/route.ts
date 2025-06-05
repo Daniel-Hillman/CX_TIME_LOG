@@ -1,4 +1,3 @@
-'''
 // src/app/api/enhance-message/route.ts
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
@@ -48,4 +47,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message || 'An unexpected error occurred' }, { status: 500 });
   }
 }
-'''
