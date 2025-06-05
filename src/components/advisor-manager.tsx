@@ -1,4 +1,3 @@
-
 'use client';
 
 import type { Advisor, AdvisorPermissions } from '@/types'; // Added AdvisorPermissions
@@ -40,7 +39,7 @@ const permissionLabels: { [K in keyof AdvisorPermissions]?: string } = {
     canAccessPolicySearch: "Policy Search",
     canAccessNextClearedBatch: "Next Cleared Batch",
     canAccessWholeOfMarket: "Whole of Market",
-    canAccessIntelligentMessaging: "Intelligent Messaging",
+    canAccessAgentTools: "Agent Tools",
     canAccessVisualisations: "Visualisations",
     canAccessSummary: "Summary",
     canAccessReports: "Reports",
@@ -53,7 +52,7 @@ const defaultPermissionKeys: (keyof AdvisorPermissions)[] = [
     'canAccessPolicySearch',
     'canAccessNextClearedBatch',
     'canAccessWholeOfMarket',
-    'canAccessIntelligentMessaging'
+    'canAccessAgentTools'
 ];
 
 const advancedPermissionKeys: (keyof AdvisorPermissions)[] = [

@@ -1,4 +1,3 @@
-
 // Defines the standard, predefined event types users can select from.
 export const standardEventTypes = [
   "Meeting",
@@ -23,7 +22,7 @@ export type AdvisorPermissions = {
   canAccessPolicySearch: boolean;
   canAccessNextClearedBatch: boolean;
   canAccessWholeOfMarket: boolean;
-  canAccessIntelligentMessaging: boolean;
+  canAccessAgentTools: boolean;
   canAccessVisualisations: boolean;
   canAccessSummary: boolean;
   canAccessReports: boolean;

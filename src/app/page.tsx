@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -46,6 +45,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Advisor, LoggedEvent, StandardEventType, standardEventTypes, AdvisorPermissions } from '@/types';
 import { addAdvisor as addAdvisorService, updateAdvisorPermissions, getDefaultPermissions } from '@/lib/firestoreService';
 import { PolicyDataMap } from '@/components/policy-search';
+import AgentPage from '@/app/agent/page';
 
 const ADVISORS_COLLECTION = 'advisors';
 const EVENTS_COLLECTION = 'loggedEvents';
@@ -611,9 +611,9 @@ export default function Home() {
                             <Building2 className="mr-2 h-4 w-4" /> Whole Of Market
                         </TabsTrigger>
                       )}
-                      {userPermissions?.canAccessIntelligentMessaging && (
-                        <TabsTrigger value="intelligent-messaging" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
-                           <Brain className="mr-2 h-4 w-4" /> IM Compose
+                      {userPermissions?.canAccessAgentTools && (
+                        <TabsTrigger value="agent" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
+                            <Brain className="mr-2 h-4 w-4" /> Agent Tools
                         </TabsTrigger>
                       )}
                      {(userPermissions?.canManageAdvisors || isCurrentUserAdmin) && (
@@ -759,19 +759,16 @@ export default function Home() {
                     </TabsContent>
                  )}
 
-                {userPermissions?.canAccessIntelligentMessaging ? (
-                    <TabsContent value="intelligent-messaging">
-                        <Card>
-                            <CardHeader><CardTitle>Intelligent Messaging (IM Compose)</CardTitle></CardHeader>
-                            <CardContent><p>Intelligent Messaging feature will be implemented here.</p></CardContent>
-                        </Card>
+                {userPermissions?.canAccessAgentTools ? (
+                    <TabsContent value="agent">
+                        <AgentPage />
                     </TabsContent>
                  ) : (
-                    <TabsContent value="intelligent-messaging">
+                    <TabsContent value="agent">
                         <div className="flex flex-col items-center justify-center p-8 border rounded-md">
                             <ShieldAlert className="h-12 w-12 text-yellow-500 mb-4" />
                             <h3 className="text-xl font-semibold mb-2">Access Restricted</h3>
-                            <p className="text-muted-foreground">You do not have permission to use Intelligent Messaging.</p>
+                            <p className="text-muted-foreground">You do not have permission to use Agent Tools.</p>
                         </div>
                     </TabsContent>
                  )}
