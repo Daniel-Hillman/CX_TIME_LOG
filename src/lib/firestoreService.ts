@@ -51,6 +51,21 @@ export const getAdvisorByFirebaseUid = async (uid: string): Promise<Advisor | nu
   return null;
 };
 
+// Fetch advisor by email
+export const getAdvisorByEmail = async (email: string): Promise<Advisor | null> => {
+  const q = query(collection(db, "advisors"), where("email", "==", email));
+  const querySnapshot = await getDocs(q);
+  if (!querySnapshot.empty) {
+    const docSnap = querySnapshot.docs[0];
+    const data = docSnap.data();
+    return {
+      id: docSnap.id,
+      ...data,
+      permissions: data.permissions ? { ...getDefaultPermissions(), ...data.permissions } : getDefaultPermissions(),
+    } as Advisor;
+  }
+  return null;
+};
 
 // 2. Add a new advisor with initial data and default permissions
 export const addAdvisor = async (

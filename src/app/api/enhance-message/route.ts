@@ -4,10 +4,13 @@ import OpenAI from 'openai';
 
 export async function POST(request: Request) {
   try {
-    const { draftMessage, provider } = await request.json(); // 'provider' is available if needed for tailored prompts in the future
+    const { draftMessage, provider, advisorName } = await request.json(); // 'provider' is available if needed for tailored prompts in the future
 
     if (!draftMessage) {
       return NextResponse.json({ error: 'Draft message is required' }, { status: 400 });
+    }
+    if (!advisorName) {
+      return NextResponse.json({ error: 'Advisor name is required' }, { status: 400 });
     }
 
     const openAIApiKey = process.env.OPENAI_API_KEY;
@@ -20,7 +23,7 @@ export async function POST(request: Request) {
     const openai = new OpenAI({ apiKey: openAIApiKey });
 
     // Construct the prompt for OpenAI
-    const prompt = `As an expert customer service professional, please refine the following draft message. Your goal is to make it highly professional, empathetic, clear, concise, and ensure it is factual and informative for the customer. Maintain the original intent of the message but enhance its delivery. Draft Message: "${draftMessage}"`;
+    const prompt = `Refine the following customer support message to be highly professional, empathetic, clear, and concise, while maintaining the original intent. Format and return the message as follows:\n- Start with 'Hey,' (not 'Dear [Customer's Name],').\n- Do NOT include any subject line.\n- Do NOT use any placeholders such as [Customer's Name], [Your Name], [Company Name], [Your Position], etc.\n- End the message with the following sign-off, on separate lines:\nKind regards,\n${advisorName}\n${provider}\n- Do NOT include any other signature block, email, or position.\n- The message should be ready to copy and send straight away, with no extra editing required.\n\nDraft Message: "${draftMessage}"`;
 
     // Make the API call to OpenAI
     // Using chat completions endpoint, you might want to adjust model and other parameters as needed

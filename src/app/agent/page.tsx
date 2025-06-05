@@ -12,6 +12,7 @@ import { Loader2, Wand2, HelpCircle, Copy } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { auth } from '../../lib/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
+import { getAdvisorByFirebaseUid, getAdvisorByEmail } from '@/lib/firestoreService';
 
 const BRAND_OPTIONS = ['Polly', 'Tom', 'Winston', 'Custom'] as const;
 type BrandOption = typeof BRAND_OPTIONS[number];
@@ -19,6 +20,7 @@ type BrandOption = typeof BRAND_OPTIONS[number];
 const AgentPage = () => {
   const { toast } = useToast();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [advisorName, setAdvisorName] = useState<string>("");
 
   // State for Message Enhancer
   const [draftMessage, setDraftMessage] = useState<string>('');
@@ -35,8 +37,20 @@ const AgentPage = () => {
   const [askError, setAskError] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
+      if (user) {
+        // Try to fetch advisor by firebaseUid first
+        let advisorDoc = await getAdvisorByFirebaseUid(user.uid);
+        if (!advisorDoc && user.email) {
+          // Fallback: fetch by email if UID lookup fails
+          advisorDoc = await getAdvisorByEmail(user.email);
+        }
+        console.log('Fetched advisorDoc:', advisorDoc, 'for uid:', user.uid, 'and email:', user.email);
+        setAdvisorName(advisorDoc?.name || "Advisor");
+      } else {
+        setAdvisorName("");
+      }
     });
     return () => unsubscribe();
   }, []);
@@ -67,16 +81,14 @@ const AgentPage = () => {
       const response = await fetch('/api/enhance-message', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ draftMessage, provider: getBrandForSignOff() }),
+        body: JSON.stringify({ draftMessage, provider: getBrandForSignOff(), advisorName }),
       });
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || `Error: ${response.status} ${response.statusText}`);
       }
       const data = await response.json();
-      const advisorName = currentUser?.displayName || currentUser?.email || "Advisor";
-      const signOff = `\n\nKind regards,\n${advisorName}\n${getBrandForSignOff()}`;
-      setEnhancedMessage(data.aiImprovedBody + signOff);
+      setEnhancedMessage(data.aiImprovedBody);
     } catch (error: any) {
       setEnhanceError(error.message || 'Failed to enhance message.');
     } finally {
