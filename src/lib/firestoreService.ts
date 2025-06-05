@@ -107,30 +107,20 @@ export const updateAdvisorPermissions = async (
     Object.keys(updatedPermissions).forEach(key => {
       (updatedPermissions as any)[key] = true;
     });
-  } else if (newPermissions.hasTopAccess === false) {
-    // If hasTopAccess is explicitly set to false, ensure it's false.
-    // Other permissions retain their values from the merge, or become default if 'hasTopAccess' was true before.
-    // This requires careful thought: if unchecking hasTopAccess, should other perms revert to defaults or last individual settings?
-    // For now, if hasTopAccess becomes false, other permissions keep their current newPermissions value or existing value.
-    // If you want to reset other permissions to default when hasTopAccess is unchecked, that logic needs to be added here.
-    // A simpler model might be: if hasTopAccess is false, the other toggles matter. If true, they are all overridden to true.
-    updatedPermissions.hasTopAccess = false;
-    // To ensure default non-admin permissions apply if hasTopAccess is turned off:
-    const defaultPerms = getDefaultPermissions();
-    for (const key in defaultPerms) {
-        if (key !== 'hasTopAccess' && newPermissions[key as keyof AdvisorPermissions] === undefined) {
-             // If a specific permission wasn't part of this update, and hasTopAccess is now false,
-             // ensure it's not stuck on 'true' from a previous 'hasTopAccess=true' state.
-             // It should revert to its individual toggle state or default.
-             // The current merged 'updatedPermissions[key]' would reflect any individual toggles made in the same batch as unchecking hasTopAccess.
-             // If no individual toggle was made for 'key', it would retain its value from before 'hasTopAccess' was toggled.
-             // This can be complex. The most straightforward is: if newPermissions.hasTopAccess is false,
-             // then updatedPermissions will reflect any other specific toggles in newPermissions, or current state for others.
-        }
-    }
   }
-  // If newPermissions.hasTopAccess is undefined, it means the 'Top Access' toggle wasn't changed in this specific update operation.
-  // Its value in updatedPermissions will be from advisor.permissions.
+  // If newPermissions.hasTopAccess is false, it means top access is being revoked.
+  // We need to ensure that permissions that are not explicitly part of this `newPermissions` batch
+  // are reset to their default values if `hasTopAccess` was previously true.
+  else if (newPermissions.hasTopAccess === false && advisor.permissions?.hasTopAccess === true) {
+    const defaultPerms = getDefaultPermissions();
+    const explicitlySetInUpdate = { ...newPermissions }; // clone to avoid modifying original newPermissions
+
+    updatedPermissions = {
+        ...defaultPerms, // Start with defaults for all
+        ...explicitlySetInUpdate, // Apply what was explicitly changed in this update batch
+        hasTopAccess: false, // Ensure top access is off
+    };
+  }
 
   await updateDoc(advisorRef, { permissions: updatedPermissions });
 };

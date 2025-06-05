@@ -37,7 +37,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.variable} ${minecraft.variable} ${designer.variable} font-sans antialiased`}>
+      <body className={`${inter.variable} ${minecraft.variable} ${designer.variable} font-sans antialiased`} suppressHydrationWarning={true}>
          <ThemeProvider
             attribute="class"
             defaultTheme="system"
