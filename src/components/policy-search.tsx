@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useCallback } from 'react'; // Keep useState for local search term/result
@@ -396,7 +395,7 @@ export function PolicySearch({
             />
             {isLoading && <Loader2 className="h-5 w-5 animate-spin" />}
           </div>
-          {fileName && !isLoading && !parseError && <p className="text-sm text-muted-foreground">Loaded: {fileName} ({policyData.size} policies)</p>}
+          {fileName && !isLoading && !parseError && <p className="text-sm text-muted-foreground">✅ Loaded: {fileName} ({policyData.size} policies)</p>}
           {parseError && (
             <Alert variant="destructive" className="mt-2">
               <AlertCircle className="h-4 w-4" />
