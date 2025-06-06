@@ -89,8 +89,9 @@ export default function Home() {
           const advisorsQuery = query(collection(db, ADVISORS_COLLECTION), where("firebaseUid", "==", currentUser.uid));
           const advisorDocsSnapshot = await getDocs(advisorsQuery);
 
+          let advisorData: Advisor | null = null;
           if (!advisorDocsSnapshot.empty) {
-            const advisorData = advisorDocsSnapshot.docs[0].data() as Advisor;
+            advisorData = advisorDocsSnapshot.docs[0].data() as Advisor;
             // Ensure permissions are always an object, defaulting if necessary
             const currentPerms = advisorData.permissions || {};
             setUserPermissions({ ...getDefaultPermissions(), ...currentPerms });
@@ -162,14 +163,20 @@ export default function Home() {
         trySetLoadingFalse();
     });
 
-    const eventsQuery = query(collection(db, EVENTS_COLLECTION));
+    // --- LOGGED EVENTS QUERY ---
+    let eventsQuery;
+    if (userPermissions.canViewAllEvents || isCurrentUserAdmin) {
+      eventsQuery = query(collection(db, EVENTS_COLLECTION));
+    } else {
+      eventsQuery = query(collection(db, EVENTS_COLLECTION), where("userId", "==", user.uid));
+    }
     const unsubscribeEvents = onSnapshot(eventsQuery, (querySnapshot) => {
       const eventsData = querySnapshot.docs.map(docSnap => {
           const data = docSnap.data();
           const event: LoggedEvent = {
               id: docSnap.id,
               ...data,
-              timestamp: (data.timestamp as Timestamp)?.toDate().toISOString() ?? new Date().toISOString(),
+              timestamp: data.timestamp?.toDate().toISOString() ?? new Date().toISOString(),
               date: data.date,
           } as LoggedEvent;
 

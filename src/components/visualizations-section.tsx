@@ -1,4 +1,3 @@
-
 'use client';
 
 import type { LoggedEvent, Advisor } from '@/types';
@@ -67,7 +66,7 @@ const formatDateRange = (range: DateRange | undefined): string => {
   return `${fromStr} - ${toStr}`;
 };
 
-const formatMinutesToHours = (totalMinutes: number): string => {
+export const formatMinutesToHours = (totalMinutes: number): string => {
     if (totalMinutes < 0) return "0 min";
     const hours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;

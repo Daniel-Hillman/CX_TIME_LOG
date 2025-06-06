@@ -54,7 +54,7 @@ interface EventListProps {
 type SortCriteria = 'date' | 'advisor' | 'eventType' | 'loggedTime';
 type SortDirection = 'asc' | 'desc';
 
-const eventTypeColorMap: Record<StandardEventType | string, string> = {
+export const eventTypeColorMap: Record<StandardEventType | string, string> = {
   "Meeting": "bg-blue-500 hover:bg-blue-600",
   "Training": "bg-green-500 hover:bg-green-600",
   "Doctor": "bg-red-500 hover:bg-red-600",
@@ -68,7 +68,7 @@ const eventTypeColorMap: Record<StandardEventType | string, string> = {
   "default": "bg-gray-400 hover:bg-gray-500",
 };
 
-const getEventTypeColor = (eventType: StandardEventType | string): string => {
+export const getEventTypeColor = (eventType: StandardEventType | string): string => {
   return eventTypeColorMap[eventType] || eventTypeColorMap.default;
 };
 

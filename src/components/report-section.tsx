@@ -6,6 +6,13 @@ import { useState, useMemo } from 'react';
 import { format, parseISO, isWithinInterval, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, startOfDay, endOfDay, subDays } from 'date-fns';
 import { DateRange } from "react-day-picker";
 import Papa from 'papaparse'; // Import papaparse
+import { formatMinutesToHours } from './visualizations-section';
+import { cn } from "@/lib/utils";
+import { toast } from "@/hooks/use-toast";
+import { useTheme } from "next-themes";
+import { Bar, Doughnut, Line } from 'react-chartjs-2';
+import ChartDataLabels from 'chartjs-plugin-datalabels';
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement, PointElement, LineElement, Filler } from 'chart.js';
 
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -14,7 +21,8 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Download, FilterX, Loader2 } from 'lucide-react'; // Added Download, FilterX, Loader2
-import { cn } from "@/lib/utils";
+import { ChartContainer } from './ui/chart';
+import { eventTypeColorMap, getEventTypeColor } from './event-list';
 
 interface ReportSectionProps {
     loggedEvents: LoggedEvent[];
@@ -46,6 +54,37 @@ const formatDateRange = (range: DateRange | undefined): string => {
   if (fromStr === toStr) return fromStr;
   return `${fromStr} - ${toStr}`;
 };
+
+// Add new interfaces for enhanced reporting
+interface ReportSummary {
+  totalTimeLogged: number;
+  averageTimePerEvent: number;
+  mostCommonEventType: string;
+  totalEvents: number;
+  timeByEventType: Record<string, number>;
+  timeByAdvisor: Record<string, number>;
+}
+
+// Add new export format options
+type ExportFormat = 'csv' | 'json';
+
+// Theme-aware color palette for charts
+const pastelPalette = [ '#a1c9f4', '#ffb482', '#8de5a1', '#ff9f9b', '#d0bbff', '#fcfcd4', '#c7ceff', '#f9c0c0', '#b5e8d8' ];
+const getColor = (idx: number) => pastelPalette[idx % pastelPalette.length];
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  ArcElement,
+  PointElement,
+  LineElement,
+  Filler,
+  ChartDataLabels
+);
 
 export function ReportSection({ loggedEvents, advisors }: ReportSectionProps) {
     const [timeRange, setTimeRange] = useState<TimeRangePreset>('week');
@@ -129,53 +168,188 @@ export function ReportSection({ loggedEvents, advisors }: ReportSectionProps) {
         return `Filters Active: Date: ${dateRangeText} | Advisor: ${advisorName} | Event Type: ${eventTypeLabel}`;
     }, [timeRange, customDateRange, selectedAdvisorId, selectedEventType, advisorMap]);
 
-    // --- CSV Export Function ---
-    const handleExport = () => {
+    // Enhanced export function
+    const handleExport = async (format: ExportFormat) => {
         if (isExporting || filteredAndSortedEvents.length === 0) return;
         setIsExporting(true);
 
         try {
-            // 1. Prepare data for CSV
-            const dataToExport = filteredAndSortedEvents.map(event => ({
-                Date: format(parseISO(event.date), 'yyyy-MM-dd'), // Standard date format
-                Advisor: advisorMap[event.advisorId] || 'Unknown',
-                EventType: event.eventType || 'N/A',
-                LoggedTimeMinutes: event.loggedTime,
-                Notes: event.notes || ''
-            }));
+            // Generate summary statistics
+            const summary: ReportSummary = {
+                totalTimeLogged: filteredAndSortedEvents.reduce((sum, event) => sum + event.loggedTime, 0),
+                averageTimePerEvent: 0,
+                mostCommonEventType: '',
+                totalEvents: filteredAndSortedEvents.length,
+                timeByEventType: {},
+                timeByAdvisor: {}
+            };
 
-            // 2. Convert to CSV string using Papaparse
-            const csv = Papa.unparse(dataToExport, {
-                header: true, // Include headers from the object keys
+            // Calculate additional metrics
+            const eventTypeCounts: Record<string, number> = {};
+            filteredAndSortedEvents.forEach(event => {
+                // Time by event type
+                if (!summary.timeByEventType[event.eventType]) {
+                    summary.timeByEventType[event.eventType] = 0;
+                }
+                summary.timeByEventType[event.eventType] += event.loggedTime;
+
+                // Time by advisor
+                if (!summary.timeByAdvisor[event.advisorId]) {
+                    summary.timeByAdvisor[event.advisorId] = 0;
+                }
+                summary.timeByAdvisor[event.advisorId] += event.loggedTime;
+
+                // Event type counts
+                eventTypeCounts[event.eventType] = (eventTypeCounts[event.eventType] || 0) + 1;
             });
 
-            // 3. Create Blob and Download Link
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            const url = URL.createObjectURL(blob);
-            link.setAttribute('href', url);
+            // Calculate averages and find most common
+            summary.averageTimePerEvent = summary.totalTimeLogged / summary.totalEvents;
+            summary.mostCommonEventType = Object.entries(eventTypeCounts)
+                .sort(([,a], [,b]) => b - a)[0][0];
 
-            // Generate filename
-            const advisorName = selectedAdvisorId === 'all' ? 'all_advisors' : (advisorMap[selectedAdvisorId] || 'unknown').replace(/\s+/g, '_').toLowerCase();
-            const eventTypeFileName = selectedEventType === 'all' ? 'all_events' : (typeof selectedEventType === 'string' ? selectedEventType.replace(/[^a-z0-9]/gi, '_').toLowerCase() : 'unknown_event');
-            const rangeLabel = (timeRange === 'custom' ? formatDateRange(customDateRange).replace(/\s*-\s*/g, '_') : getTimeRangeLabel(timeRange)).replace(/[^a-z0-9_]/gi, '_').toLowerCase();
-            const timestamp = format(new Date(), 'yyyyMMddHHmm');
-            link.setAttribute('download', `report_${advisorName}_${eventTypeFileName}_${rangeLabel}_${timestamp}.csv`);
-
-            link.style.visibility = 'hidden';
-            document.body.appendChild(link);
-
-            // 4. Trigger Download & Cleanup
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-
+            // Export based on format
+            switch (format) {
+                case 'csv':
+                    exportCSV(filteredAndSortedEvents, summary);
+                    break;
+                case 'json':
+                    exportJSON(filteredAndSortedEvents, summary);
+                    break;
+            }
         } catch (error) {
-            console.error("Error generating CSV export:", error);
-            // Optionally: show a user-facing error message here
+            console.error("Error generating export:", error);
+            toast({
+                title: "Export Error",
+                description: "Failed to generate export. Please try again.",
+                variant: "destructive"
+            });
         } finally {
-            setIsExporting(false); // Reset loading state
+            setIsExporting(false);
         }
+    };
+
+    // --- Export Helpers ---
+    function exportCSV(events: LoggedEvent[], summary: ReportSummary) {
+      const dataToExport = events.map(event => ({
+        Date: format(parseISO(event.date), 'yyyy-MM-dd'),
+        Advisor: advisorMap[event.advisorId] || 'Unknown',
+        EventType: event.eventType || 'N/A',
+        LoggedTimeMinutes: event.loggedTime,
+        Notes: event.eventDetails || ''
+      }));
+      const csv = Papa.unparse(dataToExport, { header: true });
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.setAttribute('download', `report_export_${Date.now()}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+    }
+
+    function exportJSON(events: LoggedEvent[], summary: ReportSummary) {
+      const blob = new Blob([
+        JSON.stringify({ summary, events }, null, 2)
+      ], { type: 'application/json' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.setAttribute('download', `report_export_${Date.now()}.json`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+    }
+
+    // --- Summary Calculation ---
+    const summary: ReportSummary = useMemo(() => {
+      const totalTimeLogged = filteredAndSortedEvents.reduce((sum, event) => sum + event.loggedTime, 0);
+      const totalEvents = filteredAndSortedEvents.length;
+      const eventTypeCounts: Record<string, number> = {};
+      const timeByEventType: Record<string, number> = {};
+      const timeByAdvisor: Record<string, number> = {};
+      filteredAndSortedEvents.forEach(event => {
+        eventTypeCounts[event.eventType] = (eventTypeCounts[event.eventType] || 0) + 1;
+        timeByEventType[event.eventType] = (timeByEventType[event.eventType] || 0) + event.loggedTime;
+        timeByAdvisor[event.advisorId] = (timeByAdvisor[event.advisorId] || 0) + event.loggedTime;
+      });
+      const averageTimePerEvent = totalEvents > 0 ? totalTimeLogged / totalEvents : 0;
+      const mostCommonEventType = Object.entries(eventTypeCounts).sort(([,a],[,b]) => b-a)[0]?.[0] || 'N/A';
+      return {
+        totalTimeLogged,
+        averageTimePerEvent,
+        mostCommonEventType,
+        totalEvents,
+        timeByEventType,
+        timeByAdvisor
+      };
+    }, [filteredAndSortedEvents]);
+
+    const { resolvedTheme } = useTheme();
+
+    // Prepare chart data for event type bar/doughnut
+    const eventTypeLabels = Object.keys(summary.timeByEventType);
+    const eventTypeData = Object.values(summary.timeByEventType);
+    const eventTypeColors = eventTypeLabels.map((_, idx) => getColor(idx));
+
+    // Prepare chart data for advisor bar
+    const advisorLabels = Object.keys(summary.timeByAdvisor).map(id => advisorMap[id] || id);
+    const advisorData = Object.values(summary.timeByAdvisor);
+    const advisorColors = advisorLabels.map((_, idx) => getColor(idx));
+
+    // Prepare chart data for time trend line
+    const timeTrend = (() => {
+      const dayMap: Record<string, number> = {};
+      filteredAndSortedEvents.forEach(event => {
+        const day = format(parseISO(event.date), 'yyyy-MM-dd');
+        dayMap[day] = (dayMap[day] || 0) + event.loggedTime;
+      });
+      const sorted = Object.entries(dayMap).sort((a, b) => a[0].localeCompare(b[0]));
+      return {
+        labels: sorted.map(([date]) => date),
+        data: sorted.map(([_, time]) => time)
+      };
+    })();
+
+    // Chart options (theme-aware)
+    const chartTextColor = resolvedTheme === 'dark' ? 'hsl(210 20% 95%)' : 'hsl(222.2 84% 4.9%)';
+    const barChartOptions = {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        datalabels: {
+          color: chartTextColor,
+          anchor: 'end',
+          align: 'top',
+          font: { weight: 'bold', size: 12 },
+          formatter: (value: number) => value > 0 ? formatMinutesToHours(value) : null,
+          offset: 4,
+          padding: 0
+        }
+      },
+      scales: {
+        x: { ticks: { color: chartTextColor }, grid: { color: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' } },
+        y: { ticks: { color: chartTextColor }, grid: { color: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' } }
+      }
+    };
+    const doughnutChartOptions = {
+      responsive: true,
+      plugins: {
+        legend: { position: 'top', labels: { color: chartTextColor } },
+        tooltip: { enabled: true }
+      }
+    };
+    const lineChartOptions = {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: { enabled: true }
+      },
+      scales: {
+        x: { ticks: { color: chartTextColor }, grid: { color: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' } },
+        y: { ticks: { color: chartTextColor }, grid: { color: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' } }
+      }
     };
 
     return (
@@ -195,15 +369,15 @@ export function ReportSection({ loggedEvents, advisors }: ReportSectionProps) {
                         >
                            <FilterX className="mr-2 h-4 w-4" /> Clear
                         </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={handleExport}
-                            disabled={isExporting || filteredAndSortedEvents.length === 0}
-                            aria-label="Export Report as CSV"
-                        >
-                            {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />} Export CSV
-                        </Button>
+                        <Select onValueChange={(value) => handleExport(value as ExportFormat)}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Export Format" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="csv">CSV</SelectItem>
+                                <SelectItem value="json">JSON</SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
                 </div>
 
@@ -274,6 +448,112 @@ export function ReportSection({ loggedEvents, advisors }: ReportSectionProps) {
 
             </CardHeader>
             <CardContent className="pt-4">
+                {/* --- Visualization Panel --- */}
+                <div className="mb-8">
+                    <h2 className="text-lg font-semibold mb-4">Visualizations</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Bar Chart: Time by Event Type */}
+                        <div className="bg-card rounded-lg p-4 shadow-sm border">
+                            <h3 className="font-medium mb-2">Time by Event Type (Bar)</h3>
+                            <Bar
+                                data={{
+                                    labels: eventTypeLabels,
+                                    datasets: [{ label: 'Minutes', data: eventTypeData, backgroundColor: eventTypeColors }]
+                                }}
+                                options={barChartOptions}
+                                plugins={[ChartDataLabels]}
+                            />
+                        </div>
+                        {/* Bar Chart: Time by Advisor */}
+                        <div className="bg-card rounded-lg p-4 shadow-sm border">
+                            <h3 className="font-medium mb-2">Time by Advisor (Bar)</h3>
+                            <Bar
+                                data={{
+                                    labels: advisorLabels,
+                                    datasets: [{ label: 'Minutes', data: advisorData, backgroundColor: advisorColors }]
+                                }}
+                                options={barChartOptions}
+                                plugins={[ChartDataLabels]}
+                            />
+                        </div>
+                        {/* Doughnut Chart: Event Type Share */}
+                        <div className="bg-card rounded-lg p-4 shadow-sm border">
+                            <h3 className="font-medium mb-2">Event Type Share (Pie)</h3>
+                            <Doughnut
+                                data={{
+                                    labels: eventTypeLabels,
+                                    datasets: [{ data: eventTypeData, backgroundColor: eventTypeColors }]
+                                }}
+                                options={doughnutChartOptions}
+                            />
+                        </div>
+                        {/* Line Chart: Time Trend */}
+                        <div className="bg-card rounded-lg p-4 shadow-sm border">
+                            <h3 className="font-medium mb-2">Time Trend (Line)</h3>
+                            <Line
+                                data={{
+                                    labels: timeTrend.labels,
+                                    datasets: [{ label: 'Minutes', data: timeTrend.data, borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.2)', fill: true }]
+                                }}
+                                options={lineChartOptions}
+                            />
+                        </div>
+                    </div>
+                </div>
+                {/* --- Summary Cards --- */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    {/* Total Time Logged */}
+                    <Card className="bg-card border shadow-sm">
+                        <CardHeader className="flex flex-row items-center gap-2 pb-2">
+                            <span className="text-primary"><svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" /><path d="M12 6v6l4 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg></span>
+                            <CardTitle className="text-sm font-medium">Total Time Logged</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">{formatMinutesToHours(summary.totalTimeLogged)}</div>
+                        </CardContent>
+                    </Card>
+                    {/* Average Time Per Event */}
+                    <Card className="bg-card border shadow-sm">
+                        <CardHeader className="flex flex-row items-center gap-2 pb-2">
+                            <span className="text-primary"><svg width="20" height="20" fill="none" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" strokeWidth="2" /><path d="M8 12h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg></span>
+                            <CardTitle className="text-sm font-medium">Average Time Per Event</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">{formatMinutesToHours(summary.averageTimePerEvent)}</div>
+                        </CardContent>
+                    </Card>
+                    {/* Most Common Event Type */}
+                    <Card className="bg-card border shadow-sm">
+                        <CardHeader className="flex flex-row items-center gap-2 pb-2">
+                            <span className="text-primary"><svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" /><path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg></span>
+                            <CardTitle className="text-sm font-medium">Most Common Event Type</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">{summary.mostCommonEventType}</div>
+                        </CardContent>
+                    </Card>
+                    {/* Total Events */}
+                    <Card className="bg-card border shadow-sm">
+                        <CardHeader className="flex flex-row items-center gap-2 pb-2">
+                            <span className="text-primary"><svg width="20" height="20" fill="none" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" strokeWidth="2" /><path d="M12 8v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg></span>
+                            <CardTitle className="text-sm font-medium">Total Events</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">{summary.totalEvents}</div>
+                        </CardContent>
+                    </Card>
+                </div>
+                {/* --- Event Type Breakdown --- */}
+                <div className="mb-6">
+                  <h3 className="text-md font-semibold mb-2">Event Type Breakdown</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(summary.timeByEventType).map(([type, time]) => (
+                      <div key={type} className="px-3 py-1 rounded-full text-xs font-semibold" style={{ background: '#f3f4f6', border: '1px solid #e5e7eb' }}>
+                        {type}: {formatMinutesToHours(time)}
+                      </div>
+                    ))}
+                  </div>
+                </div>
                 <ScrollArea className="h-[400px] md:h-[500px] border rounded-md"> {/* Added fixed height and border */}
                     <Table>
                         <TableHeader className="sticky top-0 bg-background z-10"> {/* Make header sticky */}
@@ -294,7 +574,7 @@ export function ReportSection({ loggedEvents, advisors }: ReportSectionProps) {
                                         <TableCell>{event.eventType || 'N/A'}</TableCell>
                                         <TableCell className="text-right">{event.loggedTime}</TableCell>
                                         <TableCell className="text-sm text-muted-foreground truncate max-w-[200px] md:max-w-[300px]"> {/* Limit note width */}
-                                            {event.notes}
+                                            {event.eventDetails}
                                         </TableCell>
                                     </TableRow>
                                 ))

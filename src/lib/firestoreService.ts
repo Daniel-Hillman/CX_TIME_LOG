@@ -15,6 +15,7 @@ export const getDefaultPermissions = (): AdvisorPermissions => ({
   canAccessReports: false,
   canManageAdvisors: false,
   hasTopAccess: false, // Default 'hasTopAccess' to false
+  canViewAllEvents: false, // Default to false for new advisors
 });
 
 // 1. Fetch an advisor's full document, including permissions

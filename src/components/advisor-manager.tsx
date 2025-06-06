@@ -45,6 +45,7 @@ const permissionLabels: { [K in keyof AdvisorPermissions]?: string } = {
     canAccessReports: "Reports",
     canManageAdvisors: "Manage Advisors",
     hasTopAccess: "Top Access (Grants All)",
+    canViewAllEvents: "View all logged events",
 };
 
 const defaultPermissionKeys: (keyof AdvisorPermissions)[] = [
@@ -431,6 +432,21 @@ export function AdvisorManager({
                                             </div>
                                         );
                                     })}
+                                    {/* New: canViewAllEvents toggle */}
+                                    <div className="flex items-center space-x-2 mt-2">
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Switch
+                                                    id={`canViewAllEvents-${advisor.id}`}
+                                                    checked={!!currentPermissions.canViewAllEvents}
+                                                    onCheckedChange={(checked) => handlePermissionChange(advisor.id, 'canViewAllEvents', checked)}
+                                                    disabled={isLoading}
+                                                />
+                                            </TooltipTrigger>
+                                            <TooltipContent><p>Allow this advisor to view all advisors' logged events in the Time Log tab.</p></TooltipContent>
+                                        </Tooltip>
+                                        <Label htmlFor={`canViewAllEvents-${advisor.id}`} className="text-xs">{permissionLabels.canViewAllEvents}</Label>
+                                    </div>
                                 </div>
                             </div>
                        </>

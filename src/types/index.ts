@@ -28,6 +28,7 @@ export type AdvisorPermissions = {
   canAccessReports: boolean;
   canManageAdvisors: boolean;
   hasTopAccess: boolean;
+  canViewAllEvents: boolean;
 };
 
 // Represents an advisor entity, typically associated with logged events.
