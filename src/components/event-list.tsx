@@ -1,4 +1,3 @@
-
 'use client';
 
 import type { LoggedEvent, Advisor, StandardEventType } from '@/types';
@@ -243,7 +242,7 @@ export function EventList({
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input type="search" placeholder="Search events..." className="pl-8 w-full md:w-[180px]" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} disabled={showOnlyToday} />
                 </div>
-                <DateRangePicker date={dateRange} onDateChange={setDateRange} disabled={showOnlyToday} />
+                <DateRangePicker date={dateRange} onDateChange={setDateRange} />
                 <Select onValueChange={setSelectedAdvisorId} value={selectedAdvisorId} disabled={showOnlyToday}>
                     <SelectTrigger className="w-full md:w-[160px]">
                         <SelectValue placeholder="Filter Advisor" />
@@ -288,7 +287,7 @@ export function EventList({
                     <TableHead className="w-[110px]">Date</TableHead>
                     <TableHead>Advisor</TableHead>
                     <TableHead>Event Type / Details</TableHead>
-                    <TableHead className="w-[100px] text-right">Time (min)</TableHead>
+                    <TableHead className="w-[160px] text-right">Time (24h)</TableHead>
                     <TableHead className="w-[100px] text-right">Actions</TableHead>
                 </TableRow>
                 </TableHeader>
@@ -327,7 +326,7 @@ export function EventList({
                                                 <>
                                                     {isExpanded ? event.eventDetails : `${event.eventDetails.substring(0, TRUNCATE_LENGTH)}${isLongDetails ? '...' : ''}`}
                                                     {isLongDetails && (
-                                                        <Button variant="link" size="xs" className="p-0 h-auto ml-1 text-blue-500" onClick={() => setExpandedEventId(isExpanded ? null : event.id)}>
+                                                        <Button variant="link" size="sm" className="p-0 h-auto ml-1 text-blue-500" onClick={() => setExpandedEventId(isExpanded ? null : event.id)}>
                                                             {isExpanded ? 'Read less' : 'Read more'}
                                                             {isExpanded ? <ChevronUp className="h-3 w-3 ml-1" /> : <ChevronDown className="h-3 w-3 ml-1" />}
                                                         </Button>
@@ -340,7 +339,11 @@ export function EventList({
                                     )}
                                 </div>
                             </TableCell>
-                            <TableCell className="text-right">{event.loggedTime || 0} min</TableCell>
+                            <TableCell className="text-right">
+                              {event.startTime && event.endTime
+                                ? `${event.startTime} - ${event.endTime}`
+                                : `${event.loggedTime} min`}
+                            </TableCell>
                             <TableCell className="text-right space-x-1">
                                 <Tooltip>
                                     <TooltipTrigger asChild>

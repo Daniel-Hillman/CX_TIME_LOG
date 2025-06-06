@@ -51,6 +51,8 @@ export type LoggedEvent = {
   eventDetails?: string | null; // Optional additional details about the event.
   loggedTime: number; // Time spent in minutes.
   timestamp: string; // ISO string representation of the Firestore Timestamp (last modified/created)
+  startTime?: string; // Start time in HH:mm format (24-hour)
+  endTime?: string; // End time in HH:mm format (24-hour)
 };
 
 

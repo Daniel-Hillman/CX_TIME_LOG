@@ -1,4 +1,3 @@
-
 'use client';
 
 import { standardEventTypes } from '@/types';
@@ -31,7 +30,8 @@ const formSchema = z.object({
   // taskId: z.string().optional(),
   eventType: z.enum(standardEventTypes, { required_error: "Please select an event type." }),
   eventDetails: z.string().optional(),
-  loggedTime: z.number({ required_error: "Please select logged time." }).min(1, { message: "Time must be at least 1 minute." }),
+  startTime: z.string({ required_error: "Start time is required." }).regex(/^\d{2}:\d{2}$/, 'Invalid start time'),
+  endTime: z.string({ required_error: "End time is required." }).regex(/^\d{2}:\d{2}$/, 'Invalid end time'),
 }).refine(data => {
   if (data.eventType === 'Other') {
     return !!data.eventDetails && typeof data.eventDetails === 'string' && data.eventDetails.trim().length > 0;
@@ -40,6 +40,16 @@ const formSchema = z.object({
 }, {
   message: "Please provide details for the 'Other' event type.",
   path: ['eventDetails'],
+}).refine(data => {
+  // Ensure endTime is after startTime
+  const [startHour, startMinute] = data.startTime.split(':').map(Number);
+  const [endHour, endMinute] = data.endTime.split(':').map(Number);
+  const start = startHour * 60 + startMinute;
+  const end = endHour * 60 + endMinute;
+  return end > start;
+}, {
+  message: "End time must be after start time.",
+  path: ['endTime'],
 });
 
 type TimeLogFormData = z.infer<typeof formSchema>;
@@ -66,7 +76,8 @@ const initialDefaultValues: Omit<TimeLogFormData, 'date'> & { date: Date | undef
     // taskId: undefined, // Removed
     eventType: standardEventTypes[0], // Default to the first standard type
     eventDetails: '',
-    loggedTime: 0,
+    startTime: '09:00',
+    endTime: '09:30',
 };
 
 export function TimeLogForm({
@@ -102,7 +113,8 @@ export function TimeLogForm({
           advisorId: eventToEdit.advisorId,
           eventType: getSafeEventType(eventToEdit.eventType), // Use safe getter
           eventDetails: eventToEdit.eventDetails || '',
-          loggedTime: eventToEdit.loggedTime,
+          startTime: eventToEdit.startTime || '09:00',
+          endTime: eventToEdit.endTime || '09:30',
         }
       : { ...initialDefaultValues, date: new Date() },
     mode: 'onChange',
@@ -118,7 +130,8 @@ export function TimeLogForm({
         advisorId: eventToEdit.advisorId,
         eventType: getSafeEventType(eventToEdit.eventType), // Use safe getter on reset
         eventDetails: eventToEdit.eventDetails || '',
-        loggedTime: eventToEdit.loggedTime,
+        startTime: eventToEdit.startTime || '09:00',
+        endTime: eventToEdit.endTime || '09:30',
       });
     } else {
        form.reset({ ...initialDefaultValues, date: new Date() }); // Reset to initial defaults
@@ -130,15 +143,21 @@ export function TimeLogForm({
        toast({ title: "Invalid Date", description: "Please select a valid date.", variant: "destructive"});
        return;
     }
-
-    // *** Update eventData to remove taskId ***
+    // Calculate duration in minutes
+    const [startHour, startMinute] = values.startTime.split(':').map(Number);
+    const [endHour, endMinute] = values.endTime.split(':').map(Number);
+    const start = startHour * 60 + startMinute;
+    const end = endHour * 60 + endMinute;
+    const duration = end - start;
     // Construct the event data based on the validated form values
     const eventData: Omit<LoggedEvent, 'userId' | 'id' | 'timestamp'> = {
       date: format(values.date, 'yyyy-MM-dd'),
       advisorId: values.advisorId,
       eventType: values.eventType, // This is guaranteed to be StandardEventType by the form schema
       eventDetails: values.eventType === 'Other' ? (values.eventDetails || '').trim() : null, // Set details or null
-      loggedTime: values.loggedTime,
+      loggedTime: duration,
+      startTime: values.startTime,
+      endTime: values.endTime,
     };
 
     // No need to explicitly delete properties, schema ensures correct types
@@ -249,8 +268,7 @@ export function TimeLogForm({
               />
             </div>
 
-             {/* Row 2: Event Type and Logged Time (Task Removed) */}
-             {/* Updated grid layout to 1 or 2 columns depending on 'Other' event type */}
+             {/* Row 2: Event Type and Time */}
              <div className={cn("grid grid-cols-1 gap-4", watchedEventType === 'Other' ? "" : "md:grid-cols-2")}>
                 {/* Event Type Field */}
                 <FormField
@@ -279,48 +297,50 @@ export function TimeLogForm({
                     )}
                     />
 
-                {/* Removed Task Field */}
-                {/* <FormField ... taskId ... /> */}
+                {/* Start Time Field */}
+                <FormField
+                  control={form.control}
+                  name="startTime"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Start Time</FormLabel>
+                      <FormControl>
+                        <input
+                          type="time"
+                          step="60"
+                          {...field}
+                          className="w-full border rounded px-2 py-1"
+                          disabled={isSubmitting}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-                {/* Logged Time Field (Now in Row 2 if event type is not 'Other') */}
-                 {watchedEventType !== 'Other' && (
-                     <FormField
-                       control={form.control}
-                       name="loggedTime"
-                       render={({ field }) => (
-                         <FormItem>
-                           <FormLabel>Time Logged (minutes)</FormLabel>
-                            <Select
-                                onValueChange={(value) => {
-                                    const parsedValue = parseInt(value, 10);
-                                    field.onChange(isNaN(parsedValue) ? 0 : parsedValue);
-                                }}
-                                value={field.value ? field.value.toString() : ''}
-                                disabled={isSubmitting}
-                             >
-                               <FormControl>
-                                 <SelectTrigger>
-                                    <Clock className="mr-2 h-4 w-4 text-muted-foreground" />
-                                   <SelectValue placeholder="Select time duration" />
-                                 </SelectTrigger>
-                               </FormControl>
-                               <SelectContent>
-                                 <SelectItem value="0" disabled={!isEditMode && field.value === 0}>Select time duration</SelectItem>
-                                 {logTimeOptions.map((time) => (
-                                   <SelectItem key={time} value={time.toString()}>
-                                     {time} min
-                                   </SelectItem>
-                                 ))}
-                               </SelectContent>
-                             </Select>
-                           <FormMessage />
-                         </FormItem>
-                       )}
-                     />
-                 )}
+                {/* End Time Field */}
+                <FormField
+                  control={form.control}
+                  name="endTime"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>End Time</FormLabel>
+                      <FormControl>
+                        <input
+                          type="time"
+                          step="60"
+                          {...field}
+                          className="w-full border rounded px-2 py-1"
+                          disabled={isSubmitting}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
              </div>
 
-             {/* Event Details and Logged Time (Row 3, only if Event Type is Other) */}
+             {/* Event Details and Time (Row 3, only if Event Type is Other) */}
              {watchedEventType === 'Other' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Event Details Field */}
@@ -343,40 +363,6 @@ export function TimeLogForm({
                         </FormItem>
                         )}
                     />
-                    {/* Logged Time Field (for 'Other') */}
-                     <FormField
-                       control={form.control}
-                       name="loggedTime"
-                       render={({ field }) => (
-                         <FormItem className="md:col-span-1">
-                           <FormLabel>Time Logged (minutes)</FormLabel>
-                            <Select
-                                onValueChange={(value) => {
-                                    const parsedValue = parseInt(value, 10);
-                                    field.onChange(isNaN(parsedValue) ? 0 : parsedValue);
-                                }}
-                                value={field.value ? field.value.toString() : ''}
-                                disabled={isSubmitting}
-                             >
-                               <FormControl>
-                                 <SelectTrigger>
-                                    <Clock className="mr-2 h-4 w-4 text-muted-foreground" />
-                                   <SelectValue placeholder="Select time duration" />
-                                 </SelectTrigger>
-                               </FormControl>
-                               <SelectContent>
-                                 <SelectItem value="0" disabled={!isEditMode && field.value === 0}>Select time duration</SelectItem>
-                                 {logTimeOptions.map((time) => (
-                                   <SelectItem key={time} value={time.toString()}>
-                                     {time} min
-                                   </SelectItem>
-                                 ))}
-                               </SelectContent>
-                             </Select>
-                           <FormMessage />
-                         </FormItem>
-                       )}
-                     />
                 </div>
             )}
 
