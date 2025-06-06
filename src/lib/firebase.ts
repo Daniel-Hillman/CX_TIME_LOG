@@ -1,7 +1,7 @@
-
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
+import { getStorage } from "firebase/storage";
 // Removed unused getAnalytics import
 
 // Your web app's Firebase configuration FOR 'cx-time-log-fresh'
@@ -23,9 +23,10 @@ const app = initializeApp(firebaseConfig);
 // Initialize Firestore and Auth
 const db = getFirestore(app);
 const auth = getAuth(app);
+const storage = getStorage(app);
 
 // If you were using Analytics and want to keep it:
 // import { getAnalytics } from "firebase/analytics";
 // const analytics = getAnalytics(app);
 
-export { db, auth };
+export { db, auth, storage };

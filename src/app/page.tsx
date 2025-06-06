@@ -78,6 +78,9 @@ export default function Home() {
   // isCurrentUserAdmin now correctly prioritizes fetched permissions, then falls back to email list.
   const isCurrentUserAdmin = userPermissions?.hasTopAccess || (user?.email && ADMIN_USERS_EMAILS.includes(user.email)) || false;
 
+  const currentAdvisor = advisors.find(a => a.firebaseUid === user?.uid);
+  const currentAdvisorId = currentAdvisor?.id || '';
+
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
@@ -686,7 +689,7 @@ export default function Home() {
 
                 {(userPermissions?.canAccessReports || isCurrentUserAdmin) ? (
                      <TabsContent value="reports">
-                         <ReportSection loggedEvents={loggedEvents} advisors={advisors} />
+                         <ReportSection loggedEvents={loggedEvents} advisors={advisors} advisorId={currentAdvisorId} />
                      </TabsContent>
                 ) : (
                     <TabsContent value="reports">

@@ -40,6 +40,7 @@ export type Advisor = {
   addedByAdminUid: string; // Firebase UID of the admin who added this advisor.
   firebaseUid?: string; // Firebase UID of the advisor after they successfully sign up.
   permissions: AdvisorPermissions; // Permissions for the advisor
+  logoUrl?: string; // Optional URL to the advisor's uploaded logo
 };
 
 // Represents a single logged event or time entry.

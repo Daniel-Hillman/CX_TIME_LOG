@@ -13,6 +13,7 @@ import { useTheme } from "next-themes";
 import { Bar, Doughnut, Line } from 'react-chartjs-2';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement, PointElement, LineElement, Filler } from 'chart.js';
+import html2canvas from 'html2canvas';
 
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -23,10 +24,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Download, FilterX, Loader2 } from 'lucide-react'; // Added Download, FilterX, Loader2
 import { ChartContainer } from './ui/chart';
 import { eventTypeColorMap, getEventTypeColor } from './event-list';
+import { uploadAdvisorLogo, getAdvisorLogoUrl } from '@/lib/firestoreService';
 
 interface ReportSectionProps {
     loggedEvents: LoggedEvent[];
     advisors: Advisor[];
+    advisorId: string;
 }
 
 type TimeRangePreset = 'day' | 'week' | 'last7' | 'last30' | 'month' | 'year' | 'all' | 'custom';
@@ -86,12 +89,13 @@ ChartJS.register(
   ChartDataLabels
 );
 
-export function ReportSection({ loggedEvents, advisors }: ReportSectionProps) {
+export function ReportSection({ loggedEvents, advisors, advisorId }: ReportSectionProps) {
     const [timeRange, setTimeRange] = useState<TimeRangePreset>('week');
     const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>(undefined);
     const [selectedAdvisorId, setSelectedAdvisorId] = useState<string | 'all'>('all');
     const [selectedEventType, setSelectedEventType] = useState<string | 'all'>('all');
     const [isExporting, setIsExporting] = useState(false); // State for export loading
+    const [isExportingPNG, setIsExportingPNG] = React.useState(false);
 
     const advisorMap = useMemo(() => {
         return advisors.reduce((map, advisor) => {
@@ -314,26 +318,26 @@ export function ReportSection({ loggedEvents, advisors }: ReportSectionProps) {
 
     // Chart options (theme-aware)
     const chartTextColor = resolvedTheme === 'dark' ? 'hsl(210 20% 95%)' : 'hsl(222.2 84% 4.9%)';
-    const barChartOptions = {
+    const barChartOptions: any = {
       responsive: true,
       plugins: {
         legend: { display: false },
         datalabels: {
           color: chartTextColor,
           anchor: 'end',
-          align: 'top',
+          align: 'end',
           font: { weight: 'bold', size: 12 },
           formatter: (value: number) => value > 0 ? formatMinutesToHours(value) : null,
           offset: 4,
           padding: 0
-        }
+        } as any
       },
       scales: {
         x: { ticks: { color: chartTextColor }, grid: { color: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' } },
         y: { ticks: { color: chartTextColor }, grid: { color: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' } }
       }
     };
-    const doughnutChartOptions = {
+    const doughnutChartOptions: any = {
       responsive: true,
       plugins: {
         legend: { position: 'top', labels: { color: chartTextColor } },
@@ -350,6 +354,27 @@ export function ReportSection({ loggedEvents, advisors }: ReportSectionProps) {
         x: { ticks: { color: chartTextColor }, grid: { color: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' } },
         y: { ticks: { color: chartTextColor }, grid: { color: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' } }
       }
+    };
+
+    // PNG Export Handler
+    const handleExportPNG = async () => {
+        setIsExportingPNG(true);
+        try {
+            const chartSection = document.getElementById('report-charts-section');
+            if (!chartSection) throw new Error('Could not find chart section');
+            const canvas = await html2canvas(chartSection, { backgroundColor: null, scale: 2 });
+            const dataUrl = canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.href = dataUrl;
+            link.download = 'advisor_report_charts.png';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } catch (err) {
+            toast({ title: 'Export failed', description: 'Could not generate PNG. Please try again.', variant: 'destructive' });
+        } finally {
+            setIsExportingPNG(false);
+        }
     };
 
     return (
@@ -448,8 +473,13 @@ export function ReportSection({ loggedEvents, advisors }: ReportSectionProps) {
 
             </CardHeader>
             <CardContent className="pt-4">
+                <div className="flex items-center gap-4 mb-6">
+                    <Button onClick={handleExportPNG} disabled={isExportingPNG} variant="outline">
+                        {isExportingPNG ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />} Export Charts as PNG
+                    </Button>
+                </div>
                 {/* --- Visualization Panel --- */}
-                <div className="mb-8">
+                <div id="report-charts-section" className="mb-8">
                     <h2 className="text-lg font-semibold mb-4">Visualizations</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Bar Chart: Time by Event Type */}
@@ -501,47 +531,49 @@ export function ReportSection({ loggedEvents, advisors }: ReportSectionProps) {
                     </div>
                 </div>
                 {/* --- Summary Cards --- */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                    {/* Total Time Logged */}
-                    <Card className="bg-card border shadow-sm">
-                        <CardHeader className="flex flex-row items-center gap-2 pb-2">
-                            <span className="text-primary"><svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" /><path d="M12 6v6l4 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg></span>
-                            <CardTitle className="text-sm font-medium">Total Time Logged</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold">{formatMinutesToHours(summary.totalTimeLogged)}</div>
-                        </CardContent>
-                    </Card>
-                    {/* Average Time Per Event */}
-                    <Card className="bg-card border shadow-sm">
-                        <CardHeader className="flex flex-row items-center gap-2 pb-2">
-                            <span className="text-primary"><svg width="20" height="20" fill="none" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" strokeWidth="2" /><path d="M8 12h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg></span>
-                            <CardTitle className="text-sm font-medium">Average Time Per Event</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold">{formatMinutesToHours(summary.averageTimePerEvent)}</div>
-                        </CardContent>
-                    </Card>
-                    {/* Most Common Event Type */}
-                    <Card className="bg-card border shadow-sm">
-                        <CardHeader className="flex flex-row items-center gap-2 pb-2">
-                            <span className="text-primary"><svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" /><path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg></span>
-                            <CardTitle className="text-sm font-medium">Most Common Event Type</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold">{summary.mostCommonEventType}</div>
-                        </CardContent>
-                    </Card>
-                    {/* Total Events */}
-                    <Card className="bg-card border shadow-sm">
-                        <CardHeader className="flex flex-row items-center gap-2 pb-2">
-                            <span className="text-primary"><svg width="20" height="20" fill="none" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" strokeWidth="2" /><path d="M12 8v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg></span>
-                            <CardTitle className="text-sm font-medium">Total Events</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold">{summary.totalEvents}</div>
-                        </CardContent>
-                    </Card>
+                <div id="report-summary-section">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                        {/* Total Time Logged */}
+                        <Card className="bg-card border shadow-sm">
+                            <CardHeader className="flex flex-row items-center gap-2 pb-2">
+                                <span className="text-primary"><svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" /><path d="M12 6v6l4 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg></span>
+                                <CardTitle className="text-sm font-medium">Total Time Logged</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold">{formatMinutesToHours(summary.totalTimeLogged)}</div>
+                            </CardContent>
+                        </Card>
+                        {/* Average Time Per Event */}
+                        <Card className="bg-card border shadow-sm">
+                            <CardHeader className="flex flex-row items-center gap-2 pb-2">
+                                <span className="text-primary"><svg width="20" height="20" fill="none" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" strokeWidth="2" /><path d="M8 12h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg></span>
+                                <CardTitle className="text-sm font-medium">Average Time Per Event</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold">{formatMinutesToHours(summary.averageTimePerEvent)}</div>
+                            </CardContent>
+                        </Card>
+                        {/* Most Common Event Type */}
+                        <Card className="bg-card border shadow-sm">
+                            <CardHeader className="flex flex-row items-center gap-2 pb-2">
+                                <span className="text-primary"><svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" /><path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg></span>
+                                <CardTitle className="text-sm font-medium">Most Common Event Type</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold">{summary.mostCommonEventType}</div>
+                            </CardContent>
+                        </Card>
+                        {/* Total Events */}
+                        <Card className="bg-card border shadow-sm">
+                            <CardHeader className="flex flex-row items-center gap-2 pb-2">
+                                <span className="text-primary"><svg width="20" height="20" fill="none" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" strokeWidth="2" /><path d="M12 8v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg></span>
+                                <CardTitle className="text-sm font-medium">Total Events</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold">{summary.totalEvents}</div>
+                            </CardContent>
+                        </Card>
+                    </div>
                 </div>
                 {/* --- Event Type Breakdown --- */}
                 <div className="mb-6">
@@ -554,39 +586,37 @@ export function ReportSection({ loggedEvents, advisors }: ReportSectionProps) {
                     ))}
                   </div>
                 </div>
-                <ScrollArea className="h-[400px] md:h-[500px] border rounded-md"> {/* Added fixed height and border */}
-                    <Table>
-                        <TableHeader className="sticky top-0 bg-background z-10"> {/* Make header sticky */}
-                            <TableRow>
-                                <TableHead className="w-[100px]">Date</TableHead>
-                                <TableHead>Advisor</TableHead>
-                                <TableHead>Event Type</TableHead>
-                                <TableHead className="text-right w-[120px]">Time (mins)</TableHead>
-                                <TableHead>Notes</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {filteredAndSortedEvents.length > 0 ? (
-                                filteredAndSortedEvents.map((event) => (
-                                    <TableRow key={event.id}>
-                                        <TableCell className="font-medium">{format(parseISO(event.date), 'dd MMM yyyy')}</TableCell>
-                                        <TableCell>{advisorMap[event.advisorId] || 'Unknown Advisor'}</TableCell>
-                                        <TableCell>{event.eventType || 'N/A'}</TableCell>
-                                        <TableCell className="text-right">{event.loggedTime}</TableCell>
-                                        <TableCell className="text-sm text-muted-foreground truncate max-w-[200px] md:max-w-[300px]"> {/* Limit note width */}
-                                            {event.eventDetails}
-                                        </TableCell>
-                                    </TableRow>
-                                ))
-                            ) : (
-                                <TableRow>
-                                    <TableCell colSpan={5} className="h-24 text-center">
-                                        No report data available for the selected filters.
-                                    </TableCell>
-                                </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
+                <ScrollArea className="h-[400px] md:h-[500px] border rounded-md">
+                  <Table>
+                    <TableHeader className="sticky top-0 bg-background z-10">
+                      <TableRow>
+                        <TableHead className="w-[100px]">Date</TableHead>
+                        <TableHead>Advisor</TableHead>
+                        <TableHead>Event Type</TableHead>
+                        <TableHead className="text-right w-[120px]">Time (mins)</TableHead>
+                        <TableHead>Notes</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredAndSortedEvents.length > 0 ? (
+                        filteredAndSortedEvents.map((event) => (
+                          <TableRow key={event.id}>
+                            <TableCell className="font-medium">{format(parseISO(event.date), 'dd MMM yyyy')}</TableCell>
+                            <TableCell>{advisorMap[event.advisorId] || 'Unknown Advisor'}</TableCell>
+                            <TableCell>{event.eventType || 'N/A'}</TableCell>
+                            <TableCell className="text-right">{event.loggedTime}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground truncate max-w-[200px] md:max-w-[300px]">{event.eventDetails}</TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={5} className="h-24 text-center">
+                            No report data available for the selected filters.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
                 </ScrollArea>
                  <div className="text-xs text-muted-foreground pt-2 text-right">
                     Total Logged Time: {filteredAndSortedEvents.reduce((acc, event) => acc + event.loggedTime, 0)} minutes

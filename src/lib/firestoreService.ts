@@ -2,6 +2,8 @@
 import { doc, getDoc, setDoc, addDoc, collection, updateDoc, getDocs, query, where } from "firebase/firestore";
 import { db } from "./firebase";
 import type { Advisor, AdvisorPermissions } from "../types";
+import { storage } from "./firebase";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 // Function to get default permissions for a new advisor
 export const getDefaultPermissions = (): AdvisorPermissions => ({
@@ -153,4 +155,22 @@ export const getAllAdvisors = async (): Promise<Advisor[]> => {
     } as Advisor;
   });
   return advisorList;
+};
+
+// Upload a logo for an advisor and save the URL to Firestore
+type LogoUploadResult = { url: string };
+export const uploadAdvisorLogo = async (advisorId: string, file: File): Promise<LogoUploadResult> => {
+  const storageRef = ref(storage, `advisor-logos/${advisorId}/${file.name}`);
+  await uploadBytes(storageRef, file);
+  const url = await getDownloadURL(storageRef);
+  // Save the logo URL to the advisor document
+  const advisorRef = doc(db, "advisors", advisorId);
+  await updateDoc(advisorRef, { logoUrl: url });
+  return { url };
+};
+
+// Fetch the advisor's logo URL (returns null if not set)
+export const getAdvisorLogoUrl = async (advisorId: string): Promise<string | null> => {
+  const advisor = await getAdvisor(advisorId);
+  return advisor?.logoUrl || null;
 };
