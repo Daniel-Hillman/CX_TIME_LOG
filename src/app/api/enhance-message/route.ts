@@ -23,7 +23,36 @@ export async function POST(request: Request) {
     const openai = new OpenAI({ apiKey: openAIApiKey });
 
     // Construct the prompt for OpenAI
-    const prompt = `Refine the following customer support message to be highly professional, empathetic, clear, and concise, while maintaining the original intent. Format and return the message as follows:\n- Start with 'Hey,' (not 'Dear [Customer's Name],').\n- Do NOT include any subject line.\n- Do NOT use any placeholders such as [Customer's Name], [Your Name], [Company Name], [Your Position], etc.\n- End the message with the following sign-off, on separate lines:\nKind regards,\n${advisorName}\n${provider}\n- Do NOT include any other signature block, email, or position.\n- The message should be ready to copy and send straight away, with no extra editing required.\n\nDraft Message: "${draftMessage}"`;
+    const prompt = `You are an expert customer service advisor. Your task is to refine customer messages to be professional, empathetic, and effective.
+
+Guidelines:
+1. Maintain a friendly but professional tone
+2. Be clear and concise
+3. Show empathy and understanding
+4. Use active voice
+5. Avoid jargon
+6. Keep paragraphs concise when possible, but please do not cut out important information.
+7. Use bullet points for multiple items
+8. Include a clear call to action if needed
+
+Format Requirements:
+- Start with 'Hey,'
+- No subject line
+- No placeholders
+- End with:
+Kind regards,
+${advisorName}
+${provider}
+
+Brand Voice:
+- Professional but approachable
+- Solution-focused
+- Empathetic
+- Clear and direct
+
+Please improve this message while following these guidelines:
+
+Draft Message: "${draftMessage}"`;
 
     // Make the API call to OpenAI
     // Using chat completions endpoint, you might want to adjust model and other parameters as needed
