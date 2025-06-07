@@ -30,7 +30,7 @@ const AgentPage = () => {
   const [isEnhancing, setIsEnhancing] = useState<boolean>(false);
   const [enhanceError, setEnhanceError] = useState<string | null>(null);
 
-  // State for Business Q&A
+  // State for Business Q&A - Retained for potential future use but UI will be disabled
   const [businessQuestion, setBusinessQuestion] = useState<string>('');
   const [aiAnswer, setAiAnswer] = useState<string>('');
   const [isAsking, setIsAsking] = useState<boolean>(false);
@@ -40,10 +40,8 @@ const AgentPage = () => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
       if (user) {
-        // Try to fetch advisor by firebaseUid first
         let advisorDoc = await getAdvisorByFirebaseUid(user.uid);
         if (!advisorDoc && user.email) {
-          // Fallback: fetch by email if UID lookup fails
           advisorDoc = await getAdvisorByEmail(user.email);
         }
         console.log('Fetched advisorDoc:', advisorDoc, 'for uid:', user.uid, 'and email:', user.email);
@@ -55,12 +53,10 @@ const AgentPage = () => {
     return () => unsubscribe();
   }, []);
 
-  // Returns the brand to use in the sign-off
   const getBrandForSignOff = () => {
     return selectedBrand === 'Custom' && customBrand.trim() ? customBrand.trim() : selectedBrand;
   };
 
-  // Handles message improvement via OpenAI
   const handleEnhanceMessage = async () => {
     if (!draftMessage.trim()) {
       setEnhanceError('Draft message cannot be empty.');
@@ -96,35 +92,9 @@ const AgentPage = () => {
     }
   };
 
-  // Handles business Q&A via OpenAI
-  const handleAskQuestion = async () => {
-    if (!businessQuestion.trim()) {
-      setAskError('Question cannot be empty.');
-      return;
-    }
-    setIsAsking(true);
-    setAskError(null);
-    setAiAnswer('');
-    try {
-      const response = await fetch('/api/ask-business-question', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ businessQuestion }),
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `Error: ${response.status} ${response.statusText}`);
-      }
-      const data = await response.json();
-      setAiAnswer(data.answer);
-    } catch (error: any) {
-      setAskError(error.message || 'Failed to get answer.');
-    } finally {
-      setIsAsking(false);
-    }
-  };
+  // handleAskQuestion is no longer called from the UI but logic retained for future
+  // const handleAskQuestion = async () => { ... };
 
-  // Handles copying text to clipboard
   const handleCopyToClipboard = (textToCopy: string, type: string) => {
     if (navigator.clipboard && textToCopy) {
       navigator.clipboard.writeText(textToCopy)
@@ -182,7 +152,7 @@ const AgentPage = () => {
         <CardContent className="space-y-4">
           <div>
             <label htmlFor="brand-select" className="block text-sm font-medium text-muted-foreground mb-1">Brand</label>
-            <Select value={selectedBrand} onValueChange={(value: BrandOption) => setSelectedBrand(value)}>
+            <Select value={selectedBrand} onValueChange={(value: BrandOption) => setSelectedBrand(value)} disabled={!currentUser}>
               <SelectTrigger id="brand-select" className="w-full md:w-1/2 lg:w-1/3">
                 <SelectValue placeholder="Select a brand" />
               </SelectTrigger>
@@ -201,6 +171,7 @@ const AgentPage = () => {
                 onChange={e => setCustomBrand(e.target.value)}
                 maxLength={40}
                 aria-label="Custom brand name"
+                disabled={!currentUser}
               />
             )}
           </div>
@@ -211,7 +182,10 @@ const AgentPage = () => {
             rows={8}
             disabled={isEnhancing || !currentUser}
           />
-          <Button onClick={handleEnhanceMessage} disabled={isEnhancing || !draftMessage.trim() || !selectedBrand || (selectedBrand === 'Custom' && !customBrand.trim()) || !currentUser}>
+          <Button 
+            onClick={handleEnhanceMessage} 
+            disabled={isEnhancing || !draftMessage.trim() || !selectedBrand || (selectedBrand === 'Custom' && !customBrand.trim()) || !currentUser}
+          >
             {isEnhancing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />} 
             Generate
           </Button>
@@ -238,45 +212,21 @@ const AgentPage = () => {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="opacity-60 pointer-events-none select-none">
         <CardHeader>
           <CardTitle className="flex items-center"><HelpCircle className="mr-2 h-6 w-6 text-primary" /> Ask a Question</CardTitle>
           <CardDescription>
-            Ask questions about business processes, policies, or any job-related queries. The AI will answer based on its training data.
+            This feature is being fine-tuned! The AI agent is currently learning to answer your business process and policy questions.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <Textarea
-            placeholder="Type your business question here..."
-            value={businessQuestion}
-            onChange={(e) => setBusinessQuestion(e.target.value)}
-            rows={5}
-            disabled={isAsking || !currentUser}
-          />
-          <Button onClick={handleAskQuestion} disabled={isAsking || !businessQuestion.trim() || !currentUser}>
-            {isAsking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <HelpCircle className="mr-2 h-4 w-4" />} 
-            Ask
-          </Button>
-          {askError && (
-            <Alert variant="destructive">
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>{askError}</AlertDescription>
-            </Alert>
-          )}
-          {aiAnswer && (
-            <div className="space-y-2 pt-4">
-              <h3 className="text-lg font-semibold">Answer:</h3>
-              <Textarea
-                value={aiAnswer}
-                readOnly
-                rows={8}
-                className="bg-muted"
-              />
-              <Button variant="outline" size="sm" onClick={() => handleCopyToClipboard(aiAnswer, 'AI Answer')} className="mt-2">
-                <Copy className="mr-2 h-4 w-4" /> Copy Answer
-              </Button>
-            </div>
-          )}
+        <CardContent className="space-y-4 flex flex-col items-center justify-center min-h-[200px]">
+          <div className="text-center p-6 bg-muted/50 rounded-lg">
+            <HelpCircle className="mx-auto h-12 w-12 text-primary/70 mb-4" />
+            <p className="text-2xl font-semibold text-foreground">Coming soon...</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Our AI is undergoing advanced training. This feature will be available shortly.
+            </p>
+          </div>
         </CardContent>
       </Card>
     </div>
