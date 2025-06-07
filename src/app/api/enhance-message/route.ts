@@ -22,21 +22,34 @@ export async function POST(request: Request) {
 
     const openai = new OpenAI({ apiKey: openAIApiKey });
 
+    // Get current hour to determine greeting
+    const currentHour = new Date().getHours();
+    let timeGreeting = 'Hey,'; // default greeting
+    if (currentHour >= 5 && currentHour < 12) {
+      timeGreeting = 'Good morning,';
+    } else if (currentHour >= 12 && currentHour < 17) {
+      timeGreeting = 'Good afternoon,';
+    } else if (currentHour >= 17 && currentHour < 22) {
+      timeGreeting = 'Good evening,';
+    }
+
     // Construct the prompt for OpenAI
     const prompt = `You are an expert customer service advisor. Your task is to refine customer messages to be professional, empathetic, and effective.
 
 Guidelines:
 1. Maintain a friendly but professional tone
 2. Be clear and concise
-3. Show empathy and understanding
+3. Show empathy and understanding but do not go overboard
 4. Use active voice
 5. Avoid jargon
 6. Keep paragraphs concise when possible, but please do not cut out important information.
-7. Use bullet points for multiple items
+7. Use bullet points for multiple items if a message is complex
 8. Include a clear call to action if needed
+9. do not start messages with 'thanks for reaching out' etc as it implies that the customer has reached out to us when in fact we could be drafting the first message. 
+
 
 Format Requirements:
-- Start with 'Hey,'
+- Start with '${timeGreeting}'
 - No subject line
 - No placeholders
 - End with:
@@ -59,7 +72,7 @@ Draft Message: "${draftMessage}"`;
     const completion = await openai.chat.completions.create({
       model: "gpt-3.5-turbo", // Or your preferred model, e.g., gpt-4
       messages: [
-        { role: "system", content: "You are an AI assistant that helps customer service advisors write professional, factual, and informative messages." },
+        { role: "system", content: "You are an AI assistant that helps customer service advisors write professional, and informative messages." },
         { role: "user", content: prompt }
       ],
       temperature: 0.7, // Adjust for creativity vs. factuality
