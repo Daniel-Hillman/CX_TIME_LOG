@@ -22,8 +22,10 @@ export async function POST(request: Request) {
 
     const openai = new OpenAI({ apiKey: openAIApiKey });
 
-    // Get current hour to determine greeting
-    const currentHour = new Date().getHours();
+    // Get current hour in UK timezone to determine greeting
+    const londonTimeStr = new Date().toLocaleString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', hour12: false });
+    const currentHour = parseInt(londonTimeStr, 10);
+
     let timeGreeting = 'Hey,'; // default greeting
     if (currentHour >= 5 && currentHour < 12) {
       timeGreeting = 'Good morning,';
