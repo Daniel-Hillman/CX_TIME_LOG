@@ -216,7 +216,7 @@ const AgentPage = () => {
         <CardHeader>
           <CardTitle className="flex items-center"><HelpCircle className="mr-2 h-6 w-6 text-primary" /> Ask a Question</CardTitle>
           <CardDescription>
-            This feature is being fine-tuned! The AI agent is currently learning to answer your business process and policy questions.
+            This agent is currently being trained, check back soon
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 flex flex-col items-center justify-center min-h-[200px]">
