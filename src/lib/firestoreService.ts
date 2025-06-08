@@ -4,6 +4,8 @@ import { db } from "./firebase";
 import type { Advisor, AdvisorPermissions } from "../types";
 import { storage } from "./firebase";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { Timestamp } from 'firebase/firestore';
+import { AdminDayHistoryEntry } from '../types';
 
 // Function to get default permissions for a new advisor
 export const getDefaultPermissions = (): AdvisorPermissions => ({
@@ -173,4 +175,79 @@ export const uploadAdvisorLogo = async (advisorId: string, file: File): Promise<
 export const getAdvisorLogoUrl = async (advisorId: string): Promise<string | null> => {
   const advisor = await getAdvisor(advisorId);
   return advisor?.logoUrl || null;
+};
+
+// --- Admin Day Feature Functions ---
+
+// Update an advisor's role
+export const updateAdvisorRole = async (
+  advisorId: string,
+  newRole: 'Standard' | 'Senior' | 'Captain'
+): Promise<void> => {
+  const advisorRef = doc(db, 'advisors', advisorId);
+  await updateDoc(advisorRef, { role: newRole });
+};
+
+// Update meeting hours and eligibility for an advisor
+export const updateAdvisorMeetingHoursAndEligibility = async (
+  advisorId: string,
+  meetingMinutes: number // total minutes for the month
+): Promise<void> => {
+  const advisorRef = doc(db, 'advisors', advisorId);
+  const meetingHours = meetingMinutes / 60;
+  const admin_day_earned = meetingHours >= 7;
+  await updateDoc(advisorRef, {
+    monthly_meeting_hours: meetingHours,
+    admin_day_earned,
+    // Optionally, reset admin_day_taken if new eligibility
+    ...(admin_day_earned ? { admin_day_taken: false } : {})
+  });
+};
+
+// Log an Admin Day grant or use
+export const logAdminDayHistory = async (
+  advisorId: string,
+  entry: AdminDayHistoryEntry
+): Promise<void> => {
+  const advisorRef = doc(db, 'advisors', advisorId);
+  const advisorSnap = await getDoc(advisorRef);
+  if (!advisorSnap.exists()) return;
+  const data = advisorSnap.data();
+  const history: AdminDayHistoryEntry[] = data.admin_day_history || [];
+  history.push(entry);
+  await updateDoc(advisorRef, { admin_day_history: history });
+};
+
+// Dismiss (grant) Admin Day flag
+export const dismissAdminDayFlag = async (
+  advisorId: string,
+  adminUid: string,
+  adminName: string
+): Promise<void> => {
+  const advisorRef = doc(db, 'advisors', advisorId);
+  await updateDoc(advisorRef, {
+    admin_day_earned: false,
+    admin_day_taken: true
+  });
+  // Log the grant
+  await logAdminDayHistory(advisorId, {
+    grantedDate: new Date().toISOString(),
+    grantedBy: adminName || adminUid
+  });
+};
+
+// Monthly reset for all advisors (to be called by a scheduled job or manually)
+export const resetAdminDayMonthly = async (): Promise<void> => {
+  const advisorsCol = collection(db, 'advisors');
+  const advisorSnapshot = await getDocs(advisorsCol);
+  const batch = [];
+  for (const docSnap of advisorSnapshot.docs) {
+    const advisorRef = doc(db, 'advisors', docSnap.id);
+    batch.push(updateDoc(advisorRef, {
+      monthly_meeting_hours: 0,
+      admin_day_earned: false,
+      admin_day_taken: false
+    }));
+  }
+  await Promise.all(batch);
 };

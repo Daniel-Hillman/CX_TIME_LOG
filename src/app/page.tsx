@@ -40,12 +40,25 @@ import { Button } from '@/components/ui/button';
 import { useToast } from "@/hooks/use-toast";
 import { Calendar, Clock, Users, AreaChart, FileSearch, FileCheck2, LogOut, Loader2, Building2, ShieldAlert, Brain } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-
+import { Badge } from '@/components/ui/badge';
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from '@/components/ui/alert-dialog';
 
 import { Advisor, LoggedEvent, StandardEventType, standardEventTypes, AdvisorPermissions } from '@/types';
-import { addAdvisor as addAdvisorService, updateAdvisorPermissions, getDefaultPermissions } from '@/lib/firestoreService';
+import { addAdvisor as addAdvisorService, updateAdvisorPermissions, getDefaultPermissions, updateAdvisorRole, dismissAdminDayFlag } from '@/lib/firestoreService';
 import { PolicyDataMap } from '@/components/policy-search';
 import AgentPage from '@/app/agent/page';
+import { updateAllAdvisorsMeetingHours } from '@/lib/adminDayUtils';
 
 const ADVISORS_COLLECTION = 'advisors';
 const EVENTS_COLLECTION = 'loggedEvents';
@@ -80,6 +93,13 @@ export default function Home() {
 
   const currentAdvisor = advisors.find(a => a.firebaseUid === user?.uid);
   const currentAdvisorId = currentAdvisor?.id || '';
+
+  // Find if current user is eligible for Admin Day
+  const isEligibleForAdminDay = currentAdvisor?.admin_day_earned;
+
+  // Add state for self-admin-day dialog
+  const [showAdminDayDialog, setShowAdminDayDialog] = useState(false);
+  const [isTakingAdminDay, setIsTakingAdminDay] = useState(false);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
@@ -179,7 +199,12 @@ export default function Home() {
           const event: LoggedEvent = {
               id: docSnap.id,
               ...data,
-              timestamp: data.timestamp?.toDate().toISOString() ?? new Date().toISOString(),
+              timestamp:
+                data.timestamp && typeof data.timestamp.toDate === 'function'
+                  ? data.timestamp.toDate().toISOString()
+                  : (typeof data.timestamp === 'string'
+                      ? data.timestamp
+                      : new Date().toISOString()),
               date: data.date,
           } as LoggedEvent;
 
@@ -241,6 +266,12 @@ export default function Home() {
       try {
           await deleteDoc(doc(db, EVENTS_COLLECTION, id));
           toast({ title: "Success", description: "Log entry deleted." });
+          // Fetch latest events and advisors before updating eligibility
+          const eventsSnapshot = await getDocs(collection(db, EVENTS_COLLECTION));
+          const advisorsSnapshot = await getDocs(collection(db, ADVISORS_COLLECTION));
+          const latestEvents = eventsSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as LoggedEvent));
+          const latestAdvisors = advisorsSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Advisor));
+          await updateAllAdvisorsMeetingHours(latestEvents, latestAdvisors);
       } catch (error) {
           console.error("Error deleting log entry: ", error);
           toast({ variant: "destructive", title: "Error", description: "Failed to delete log entry." });
@@ -250,7 +281,7 @@ export default function Home() {
   }, [user, loggedEvents, isCurrentUserAdmin, toast]);
 
 
-  const addTimeLog = useCallback(async (eventData: Omit<LoggedEvent, 'id' | 'timestamp' | 'userId'>) => {
+  const addTimeLog = useCallback(async (eventData: Omit<LoggedEvent, 'id' | 'timestamp' | 'userId'>): Promise<void> => {
     if (!user || !userPermissions?.canAccessTimeLog) {
         toast({ variant: "destructive", title: "Permission Denied", description: "You do not have permission to log time." });
         return;
@@ -260,11 +291,17 @@ export default function Home() {
       const newEvent = {
         ...eventData,
         userId: user.uid,
-        timestamp: Timestamp.fromDate(new Date()),
+        timestamp: new Date().toISOString(),
       };
       await addDoc(collection(db, EVENTS_COLLECTION), newEvent);
       toast({ title: "Success", description: "Time logged successfully."});
       setEventToEdit(null);
+      // Fetch latest events and advisors before updating eligibility
+      const eventsSnapshot = await getDocs(collection(db, EVENTS_COLLECTION));
+      const advisorsSnapshot = await getDocs(collection(db, ADVISORS_COLLECTION));
+      const latestEvents = eventsSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as LoggedEvent));
+      const latestAdvisors = advisorsSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Advisor));
+      await updateAllAdvisorsMeetingHours(latestEvents, latestAdvisors);
     } catch (error) {
       console.error("Error adding time log: ", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to log time." });
@@ -273,7 +310,7 @@ export default function Home() {
     }
   }, [user, userPermissions, toast]);
 
-  const editLogEntry = useCallback(async (updatedEvent: LoggedEvent) => {
+  const editLogEntry = useCallback(async (updatedEvent: LoggedEvent): Promise<void> => {
       if (!user) {
           toast({ variant: "destructive", title: "Error", description: "You must be logged in." });
           return;
@@ -296,23 +333,26 @@ export default function Home() {
               eventType: updatedEvent.eventType,
               eventDetails: updatedEvent.eventDetails,
               loggedTime: updatedEvent.loggedTime,
-              timestamp: Timestamp.fromDate(new Date()),
+              timestamp: new Date().toISOString(),
           };
-
           Object.keys(dataToUpdate).forEach(key => {
               const typedKey = key as keyof typeof dataToUpdate;
               if (dataToUpdate[typedKey] === undefined) {
                   delete dataToUpdate[typedKey];
               }
           });
-
           if (dataToUpdate.eventType !== 'Other' && dataToUpdate.hasOwnProperty('eventDetails')) {
               dataToUpdate.eventDetails = null;
           }
-
           await updateDoc(eventRef, dataToUpdate);
           toast({ title: "Success", description: "Event updated successfully." });
           setEventToEdit(null);
+          // Fetch latest events and advisors before updating eligibility
+          const eventsSnapshot = await getDocs(collection(db, EVENTS_COLLECTION));
+          const advisorsSnapshot = await getDocs(collection(db, ADVISORS_COLLECTION));
+          const latestEvents = eventsSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as LoggedEvent));
+          const latestAdvisors = advisorsSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Advisor));
+          await updateAllAdvisorsMeetingHours(latestEvents, latestAdvisors);
       } catch (error) {
           console.error("Error editing log entry: ", error);
           toast({ variant: "destructive", title: "Error", description: "Failed to update event." });
@@ -519,6 +559,33 @@ export default function Home() {
     }
   };
 
+  // Add handler for updating advisor role
+  const handleUpdateAdvisorRole = async (advisorId: string, newRole: 'Standard' | 'Senior' | 'Captain') => {
+    await updateAdvisorRole(advisorId, newRole);
+    await updateAllAdvisorsMeetingHours(loggedEvents, advisors);
+  };
+
+  // Add handler for dismissing Admin Day flag
+  const handleDismissAdminDayFlag = async (advisorId: string, adminUid: string, adminName: string) => {
+    await dismissAdminDayFlag(advisorId, adminUid, adminName);
+    // Optionally, refresh advisors list here if not using real-time updates
+  };
+
+  // Handler for self-dismiss
+  const handleTakeAdminDay = async () => {
+    if (!currentAdvisor || !user) return;
+    setIsTakingAdminDay(true);
+    try {
+      await dismissAdminDayFlag(currentAdvisor.id, user.uid, user.displayName || user.email || '');
+      toast({ title: 'Admin Day Taken', description: 'You have taken your Admin Day for this month.' });
+    } catch (e) {
+      toast({ title: 'Error', description: 'Failed to take Admin Day.', variant: 'destructive' });
+    } finally {
+      setIsTakingAdminDay(false);
+      setShowAdminDayDialog(false);
+    }
+  };
+
   if (isLoadingAuth || (user && isLoadingPermissions)) {
     return (
         <div className="flex justify-center items-center min-h-screen">
@@ -577,6 +644,70 @@ export default function Home() {
                  </Button>
              </div>
          </header>
+
+         {/* Admin Day Banner/Badge for eligible users or admins */}
+         {(isEligibleForAdminDay &&
+           ((currentAdvisor?.firebaseUid === user?.uid && (currentAdvisor?.role === 'Senior' || currentAdvisor?.role === 'Captain')) || isCurrentUserAdmin)
+         ) && (
+           <div className="flex flex-col items-center mb-6">
+             <Badge variant="destructive" className="text-lg px-4 py-2 mb-2">
+               🎉 You are eligible for an Admin Day this month!
+             </Badge>
+             {/* Self-take button for eligible Seniors/Captains */}
+             {(currentAdvisor?.firebaseUid === user?.uid && (currentAdvisor?.role === 'Senior' || currentAdvisor?.role === 'Captain')) && (
+               <>
+                 <AlertDialog open={showAdminDayDialog} onOpenChange={setShowAdminDayDialog}>
+                   <AlertDialogTrigger asChild>
+                     <Button variant="outline" className="mb-2" onClick={() => setShowAdminDayDialog(true)} disabled={isTakingAdminDay}>
+                       Take Admin Day
+                     </Button>
+                   </AlertDialogTrigger>
+                   <AlertDialogContent>
+                     <AlertDialogHeader>
+                       <AlertDialogTitle>Take Admin Day?</AlertDialogTitle>
+                       <AlertDialogDescription>
+                         Are you sure you want to take your Admin Day for this month? This action cannot be undone until you earn it again next month.
+                       </AlertDialogDescription>
+                     </AlertDialogHeader>
+                     <AlertDialogFooter>
+                       <AlertDialogCancel disabled={isTakingAdminDay}>Cancel</AlertDialogCancel>
+                       <AlertDialogAction onClick={handleTakeAdminDay} disabled={isTakingAdminDay}>
+                         {isTakingAdminDay ? 'Processing...' : 'Yes, Take Admin Day'}
+                       </AlertDialogAction>
+                     </AlertDialogFooter>
+                   </AlertDialogContent>
+                 </AlertDialog>
+                 {/* Admin Day History Accordion */}
+                 {Array.isArray(currentAdvisor?.admin_day_history) && currentAdvisor.admin_day_history.length > 0 && (
+                   <Accordion type="single" collapsible className="w-full max-w-md mx-auto mt-2">
+                     <AccordionItem value="history">
+                       <AccordionTrigger className="text-base font-medium">View Admin Day History</AccordionTrigger>
+                       <AccordionContent>
+                         <ul className="space-y-2">
+                           {currentAdvisor.admin_day_history.slice().reverse().map((entry, idx) => (
+                             <li key={idx} className="border rounded p-2 bg-muted/50">
+                               <div className="flex flex-col md:flex-row md:justify-between md:items-center">
+                                 <span><span className="font-semibold">Granted:</span> {new Date(entry.grantedDate).toLocaleDateString()}</span>
+                                 <span className="text-xs text-muted-foreground">by {entry.grantedBy}</span>
+                               </div>
+                               {entry.usedDate && (
+                                 <div className="flex flex-col md:flex-row md:justify-between md:items-center mt-1">
+                                   <span><span className="font-semibold">Taken:</span> {new Date(entry.usedDate).toLocaleDateString()}</span>
+                                   <span className="text-xs text-muted-foreground">by {entry.usedBy}</span>
+                                 </div>
+                               )}
+                               {entry.notes && <div className="mt-1 text-xs italic">{entry.notes}</div>}
+                             </li>
+                           ))}
+                         </ul>
+                       </AccordionContent>
+                     </AccordionItem>
+                   </Accordion>
+                 )}
+               </>
+             )}
+           </div>
+         )}
 
          {isLoadingData ? (
              <div className="flex justify-center items-center py-10">
@@ -640,9 +771,9 @@ export default function Home() {
                              <TimeLogForm
                                  advisors={advisors.filter(a => a.status === 'active')}
                                  onLogEvent={addTimeLog}
-                                 onUpdateEvent={(eventId, eventData) => {
+                                 onUpdateEvent={async (eventId, eventData) => {
                                       const fullEventData = { ...eventData, id: eventId };
-                                      editLogEntry(fullEventData as LoggedEvent & { eventType: StandardEventType });
+                                      await editLogEntry(fullEventData as LoggedEvent & { eventType: StandardEventType });
                                   }}
                                  onCancelEdit={handleCancelEdit}
                                  eventToEdit={eventToEdit}
@@ -792,6 +923,11 @@ export default function Home() {
                              onRemoveAdvisor={removeAdvisor}
                              onEditAdvisor={editAdvisor}
                              onUpdateAdvisorPermissions={handleUpdatePermissions}
+                             onUpdateAdvisorRole={handleUpdateAdvisorRole}
+                             onDismissAdminDayFlag={handleDismissAdminDayFlag}
+                             currentUser={user}
+                             isAdmin={isCurrentUserAdmin}
+                             hasTopAccess={userPermissions?.hasTopAccess}
                          />
                      </TabsContent>
                  ) : (

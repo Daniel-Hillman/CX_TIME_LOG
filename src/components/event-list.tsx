@@ -194,11 +194,10 @@ export function EventList({
 
   const handleDelete = async (event: LoggedEvent) => {
     if (deletingId) return;
-    // const displayTitle = getEventDisplayTitle(event); // Already captured in AlertDialog
     try {
         await onDeleteEvent(event.id);
     } catch (error) { console.error("Error calling onDeleteEvent from EventList:", error); }
-  }
+  };
 
   const handleEdit = (event: LoggedEvent) => {
       if (deletingId) return;

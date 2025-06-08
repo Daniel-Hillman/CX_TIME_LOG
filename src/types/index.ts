@@ -41,6 +41,21 @@ export type Advisor = {
   firebaseUid?: string; // Firebase UID of the advisor after they successfully sign up.
   permissions: AdvisorPermissions; // Permissions for the advisor
   logoUrl?: string; // Optional URL to the advisor's uploaded logo
+  // --- Admin Day Feature Fields ---
+  role?: 'Standard' | 'Senior' | 'Captain'; // Advisor role
+  monthly_meeting_hours?: number; // Meeting hours logged this month
+  admin_day_earned?: boolean; // Eligible for Admin Day this month
+  admin_day_taken?: boolean; // Admin Day has been granted/taken this month
+  admin_day_history?: AdminDayHistoryEntry[]; // History of Admin Days
+};
+
+// Represents a single Admin Day history entry
+export type AdminDayHistoryEntry = {
+  grantedDate: string; // ISO date when Admin Day was granted
+  grantedBy: string; // Name or UID of the admin who granted
+  usedDate?: string; // ISO date when Admin Day was used (if applicable)
+  usedBy?: string; // Name or UID of the user who used it (if applicable)
+  notes?: string; // Optional notes or comments
 };
 
 // Represents a single logged event or time entry.
