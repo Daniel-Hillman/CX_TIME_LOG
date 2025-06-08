@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth'; // Renamed User to FirebaseUser to avoid conflict
 import { auth, db } from '@/lib/firebase';
 import {
@@ -38,7 +38,7 @@ import { LoginForm } from '@/components/auth/login-form';
 import { SignUpForm } from '@/components/auth/signup-form';
 import { Button } from '@/components/ui/button';
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, Clock, Users, AreaChart, FileSearch, FileCheck2, LogOut, Loader2, Building2, ShieldAlert, Brain } from 'lucide-react';
+import { Calendar, Clock, Users, AreaChart, FileSearch, FileCheck2, LogOut, Loader2, Building2, ShieldAlert, Brain, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
@@ -100,6 +100,30 @@ export default function Home() {
   // Add state for self-admin-day dialog
   const [showAdminDayDialog, setShowAdminDayDialog] = useState(false);
   const [isTakingAdminDay, setIsTakingAdminDay] = useState(false);
+
+  // Tab scroll button logic
+  const tabsListRef = useRef<HTMLDivElement>(null);
+  const [showScrollLeft, setShowScrollLeft] = useState(false);
+  const [showScrollRight, setShowScrollRight] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const el = tabsListRef.current;
+      if (!el) return;
+      setShowScrollLeft(el.scrollLeft > 0);
+      setShowScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+    };
+    const el = tabsListRef.current;
+    if (el) {
+      el.addEventListener('scroll', handleScroll);
+      handleScroll();
+    }
+    window.addEventListener('resize', handleScroll);
+    return () => {
+      if (el) el.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleScroll);
+    };
+  }, []);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
@@ -716,7 +740,26 @@ export default function Home() {
             </div>
          ) : (
              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                 <TabsList className="flex flex-row flex-nowrap overflow-x-auto rounded-xl shadow-lg bg-card/80 border mb-12 p-2 gap-2 h-auto sticky top-0 z-20 hide-scrollbar">
+                 <div className="relative w-full">
+                   {showScrollLeft && (
+                     <button
+                       type="button"
+                       aria-label="Scroll tabs left"
+                       className="absolute left-0 top-1/2 -translate-y-1/2 z-30 bg-card/80 rounded-full p-1 shadow-md border border-muted flex items-center justify-center"
+                       onClick={() => {
+                         const el = tabsListRef.current;
+                         if (el) el.scrollBy({ left: -150, behavior: 'smooth' });
+                       }}
+                     >
+                       <ChevronLeft className="h-5 w-5" />
+                     </button>
+                   )}
+                   <TabsList
+                     id="main-tabs-list"
+                     ref={tabsListRef}
+                     className="flex flex-row flex-nowrap overflow-x-auto rounded-xl shadow-lg bg-card/80 border mb-12 p-2 gap-2 h-auto sticky top-0 z-20 hide-scrollbar scroll-smooth"
+                     style={{ scrollBehavior: 'smooth' }}
+                   >
                      {userPermissions?.canAccessTimeLog && (
                         <TabsTrigger value="time-log" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
                             <Clock className="mr-2 h-4 w-4" /> Time Log
@@ -762,7 +805,21 @@ export default function Home() {
                             <Users className="mr-2 h-4 w-4" /> Manage Advisors
                         </TabsTrigger>
                      )}
-                 </TabsList>
+                   </TabsList>
+                   {showScrollRight && (
+                     <button
+                       type="button"
+                       aria-label="Scroll tabs right"
+                       className="absolute right-0 top-1/2 -translate-y-1/2 z-30 bg-card/80 rounded-full p-1 shadow-md border border-muted flex items-center justify-center"
+                       onClick={() => {
+                         const el = tabsListRef.current;
+                         if (el) el.scrollBy({ left: 150, behavior: 'smooth' });
+                       }}
+                     >
+                       <ChevronRight className="h-5 w-5" />
+                     </button>
+                   )}
+                 </div>
 
                 {userPermissions?.canAccessTimeLog ? (
                  <TabsContent value="time-log">
