@@ -716,7 +716,7 @@ export default function Home() {
             </div>
          ) : (
              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                 <TabsList className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:flex lg:flex-wrap justify-center gap-2 mb-12 p-1 h-auto">
+                 <TabsList className="flex flex-row flex-nowrap overflow-x-auto rounded-xl shadow-lg bg-card/80 border mb-12 p-2 gap-2 h-auto sticky top-0 z-20 hide-scrollbar">
                      {userPermissions?.canAccessTimeLog && (
                         <TabsTrigger value="time-log" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
                             <Clock className="mr-2 h-4 w-4" /> Time Log

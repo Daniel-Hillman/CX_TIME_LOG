@@ -262,203 +262,197 @@ export function AdvisorManager({
     };
 
   return (
-    <TooltipProvider> {/* Added TooltipProvider for context */} 
-    <Card className="w-full shadow-lg">
-      <CardHeader>
-        <CardTitle className="text-xl font-semibold text-primary">Manage Advisors</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-3 mb-6">
-          <Input
-            ref={addNameInputRef}
-            type="text"
-            placeholder="New advisor name"
-            value={newAdvisorName}
-            onChange={(e) => setNewAdvisorName(e.target.value)}
-            aria-label="New advisor name"
-            disabled={isLoading || !!editingAdvisorId}
-          />
-          <Input
-            ref={addEmailInputRef}
-            type="email"
-            placeholder="New advisor email (@clark.io)"
-            value={newAdvisorEmail}
-            onChange={(e) => setNewAdvisorEmail(e.target.value)}
-            aria-label="New advisor email"
-            disabled={isLoading || !!editingAdvisorId}
-             onKeyDown={(e) => !isLoading && !editingAdvisorId && e.key === 'Enter' && handleAdd()}
-          />
-          <Button
-            onClick={handleAdd}
-            aria-label="Add Advisor"
-            variant="outline"
-            className="bg-accent text-accent-foreground hover:bg-accent/90 w-full sm:w-auto"
-            disabled={isLoading || !!editingAdvisorId}
-          >
-            {isLoading && !removingId && !editingAdvisorId ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <UserPlus className="mr-2 h-4 w-4" />
-            )}
-            {isLoading && !removingId && !editingAdvisorId ? 'Adding...' : 'Add Advisor'}
-          </Button>
-        </div>
+    <TooltipProvider>
+      <div className="flex flex-col gap-8 w-full">
+        {/* Add Advisor Section */}
+        <Card className="w-full max-w-2xl mx-auto shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-xl font-semibold text-primary">Add New Advisor</CardTitle>
+            <p className="text-muted-foreground text-sm mt-1">Fill in the details to add a new advisor to your team.</p>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col sm:flex-row gap-3 items-center">
+              <Input
+                ref={addNameInputRef}
+                type="text"
+                placeholder="Name"
+                value={newAdvisorName}
+                onChange={(e) => setNewAdvisorName(e.target.value)}
+                aria-label="New advisor name"
+                disabled={isLoading || !!editingAdvisorId}
+                className="sm:w-48"
+              />
+              <Input
+                ref={addEmailInputRef}
+                type="email"
+                placeholder="Email (@clark.io)"
+                value={newAdvisorEmail}
+                onChange={(e) => setNewAdvisorEmail(e.target.value)}
+                aria-label="New advisor email"
+                disabled={isLoading || !!editingAdvisorId}
+                onKeyDown={(e) => !isLoading && !editingAdvisorId && e.key === 'Enter' && handleAdd()}
+                className="sm:w-64"
+              />
+              <Button
+                onClick={handleAdd}
+                aria-label="Add Advisor"
+                variant="default"
+                className="w-full sm:w-auto"
+                disabled={isLoading || !!editingAdvisorId}
+              >
+                {isLoading && !removingId && !editingAdvisorId ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <UserPlus className="mr-2 h-4 w-4" />
+                )}
+                {isLoading && !removingId && !editingAdvisorId ? 'Adding...' : 'Add Advisor'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
-        <ScrollArea className="h-[calc(100vh-450px)] min-h-[280px] border rounded-md p-2 bg-secondary/30">
-          {advisors.length === 0 ? (
-             <p className="text-center text-muted-foreground p-4">No advisors added yet.</p>
-          ) : (
-            <div className="space-y-4">
-              {advisors.map((advisor) => {
-                const isRemovingThis = removingId === advisor.id;
-                const isEditingThis = editingAdvisorId === advisor.id;
-                const currentPermissions = advisor.permissions || {} as AdvisorPermissions;
-
-                return (
-                  <Card key={advisor.id} className="p-4 border rounded-md">
-                    <CardHeader>
-                      <CardTitle className="text-sm font-semibold text-primary">{advisor.name}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-2">
-                        <p className="text-sm text-muted-foreground">{advisor.email}</p>
-                        <p className="text-sm text-muted-foreground">
+        {/* Advisor List Section */}
+        <Card className="w-full shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-xl font-semibold text-primary">Manage Advisors</CardTitle>
+            <p className="text-muted-foreground text-sm mt-1">View, edit, and manage permissions for all advisors.</p>
+          </CardHeader>
+          <CardContent>
+            <ScrollArea className="h-[calc(100vh-450px)] min-h-[280px] border rounded-md p-2 bg-secondary/30">
+              {advisors.length === 0 ? (
+                <p className="text-center text-muted-foreground p-4">No advisors added yet.</p>
+              ) : (
+                <div className="grid grid-cols-1 gap-4">
+                  {/* Table Header */}
+                  <div className="hidden md:grid grid-cols-12 gap-2 px-2 py-1 text-xs font-semibold text-muted-foreground border-b">
+                    <div className="col-span-2">Advisor</div>
+                    <div className="col-span-2">Email</div>
+                    <div className="col-span-1">Status</div>
+                    <div className="col-span-2">Role</div>
+                    <div className="col-span-3">Permissions</div>
+                    <div className="col-span-2 text-right">Actions</div>
+                  </div>
+                  {advisors.map((advisor) => {
+                    const isRemovingThis = removingId === advisor.id;
+                    const isEditingThis = editingAdvisorId === advisor.id;
+                    const currentPermissions = advisor.permissions || {} as AdvisorPermissions;
+                    // Avatar/Initials
+                    const initials = advisor.name.split(' ').map(n => n[0]).join('').toUpperCase();
+                    return (
+                      <div key={advisor.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center bg-card rounded-lg p-3 group border hover:shadow-md transition-all">
+                        {/* Advisor Avatar & Name */}
+                        <div className="flex items-center gap-3 col-span-2">
+                          <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg">
+                            {initials}
+                          </div>
+                          <div>
+                            <div className="font-medium text-sm text-primary">{advisor.name}</div>
+                            <div className="md:hidden text-xs text-muted-foreground">{advisor.email}</div>
+                          </div>
+                        </div>
+                        {/* Email */}
+                        <div className="hidden md:block col-span-2 text-xs text-muted-foreground">{advisor.email}</div>
+                        {/* Status */}
+                        <div className="col-span-1">
                           {advisor.status === 'active' ? (
                             <Badge variant="default">Active</Badge>
                           ) : (
                             <Badge variant="destructive">Pending</Badge>
                           )}
-                        </p>
-                      </div>
-                      <div className="space-y-2 mt-4">
-                        {Object.entries(currentPermissions).map(([key, checked]) => (
-                          <div key={key}>
-                            <Switch
-                              checked={checked}
-                              onCheckedChange={(value) => handlePermissionChange(advisor.id, key as keyof AdvisorPermissions, value)}
-                              disabled={isLoading || !isAdmin}
-                            />
-                            <Label>{permissionLabels[key as keyof AdvisorPermissions] || key}</Label>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                    <CardFooter className="flex justify-between items-center">
-                      <div className="flex items-center space-x-2">
-                        {isAdmin && (
-                          <Select
-                            value={advisor.role || 'Standard'}
-                            onValueChange={async (role) => {
-                              await onUpdateAdvisorRole(advisor.id, role as 'Standard' | 'Senior' | 'Captain');
-                            }}
-                          >
-                            <SelectTrigger className="w-28">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="Standard">Standard</SelectItem>
-                              <SelectItem value="Senior">Senior</SelectItem>
-                              <SelectItem value="Captain">Captain</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        )}
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        {(advisor.admin_day_earned && (isAdmin || advisor.firebaseUid === currentUserId)) && (
-                          <TooltipProvider>
-                            <Tooltip>
+                        </div>
+                        {/* Role */}
+                        <div className="col-span-2 flex items-center gap-2">
+                          <Badge variant={advisor.role === 'Captain' ? 'default' : advisor.role === 'Senior' ? 'secondary' : 'outline'} className="capitalize">
+                            {advisor.role || 'Standard'}
+                          </Badge>
+                          {isAdmin && (
+                            <Select
+                              value={advisor.role || 'Standard'}
+                              onValueChange={async (role) => {
+                                await onUpdateAdvisorRole(advisor.id, role as 'Standard' | 'Senior' | 'Captain');
+                              }}
+                            >
+                              <SelectTrigger className="w-24 h-7 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Standard">Standard</SelectItem>
+                                <SelectItem value="Senior">Senior</SelectItem>
+                                <SelectItem value="Captain">Captain</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          )}
+                        </div>
+                        {/* Permissions */}
+                        <div className="col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {Object.entries(currentPermissions).map(([key, checked]) => (
+                            <Tooltip key={key}>
                               <TooltipTrigger asChild>
-                                <Badge variant="destructive" className="cursor-pointer">Admin Day</Badge>
+                                <div className="flex items-center gap-2 p-1 min-w-0">
+                                  <Switch
+                                    checked={checked}
+                                    onCheckedChange={(value) => handlePermissionChange(advisor.id, key as keyof AdvisorPermissions, value)}
+                                    disabled={isLoading || !isAdmin}
+                                    className="scale-90"
+                                  />
+                                  <Label className="text-xs cursor-pointer break-words truncate max-w-[120px]" title={permissionLabels[key as keyof AdvisorPermissions] || key}>
+                                    {permissionLabels[key as keyof AdvisorPermissions] || key}
+                                  </Label>
+                                </div>
                               </TooltipTrigger>
                               <TooltipContent>
-                                <span>This advisor is eligible for an Admin Day this month.</span>
+                                {permissionLabels[key as keyof AdvisorPermissions] || key}
                               </TooltipContent>
                             </Tooltip>
-                          </TooltipProvider>
-                        )}
-                        {(advisor.admin_day_earned && hasTopAccess) && (
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button size="sm" variant="outline" className="ml-2" onClick={async () => {
-                                await onDismissAdminDayFlag(advisor.id, currentUser?.uid, currentUser?.displayName || currentUser?.email);
-                              }}>Dismiss</Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Grant Admin Day?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Are you sure you want to mark this Admin Day as granted for {advisor.name}?
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={async () => {
-                                  // TODO: Call backend to dismiss flag
-                                  toast({ title: 'Admin Day Granted', description: `Admin Day granted for ${advisor.name}` });
-                                }}>Grant</AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        )}
+                          ))}
+                        </div>
+                        {/* Actions */}
+                        <div className="col-span-2 flex justify-end gap-1">
+                          {isEditingThis ? (
+                            <>
+                              <Button variant="ghost" size="sm" onClick={handleEdit} disabled={isLoading && !isEditingThis}>Save</Button>
+                              <Button variant="ghost" size="sm" onClick={cancelEditing} disabled={isLoading && !isEditingThis}>Cancel</Button>
+                            </>
+                          ) : (
+                            <div className="flex items-center gap-1">
+                              <Button variant="ghost" size="icon" onClick={() => startEditing(advisor)} aria-label={`Edit ${advisor.name}`} className="text-primary hover:bg-primary/10 h-7 w-7" disabled={isLoading || !!editingAdvisorId}>
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="ghost" size="icon" aria-label={`Remove ${advisor.name}`} className="text-destructive hover:bg-destructive/10 h-7 w-7" disabled={isLoading || !!editingAdvisorId}>
+                                    {isRemovingThis ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader><AlertDialogTitle>Confirm Deletion</AlertDialogTitle><AlertDialogDescription>
+                                      Are you sure you want to remove advisor '{advisor.name}' ({advisor.email})?
+                                      {advisor.status === 'active' && " This advisor has an active account."}
+                                      This action cannot be undone.
+                                  </AlertDialogDescription></AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                      <AlertDialogCancel disabled={isLoading}>Cancel</AlertDialogCancel>
+                                      <AlertDialogAction onClick={() => handleRemove(advisor.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={isLoading}>
+                                          {isRemovingThis ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Delete
+                                      </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        {(isAdmin || advisor.firebaseUid === currentUserId) && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setExpandedHistory(expandedHistory === advisor.id ? null : advisor.id)}
-                            aria-label="Toggle history"
-                          >
-                            {expandedHistory === advisor.id ? <ChevronUp /> : <ChevronDown />}
-                          </Button>
-                        )}
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        {isEditingThis ? (
-                          <div className="flex gap-2 justify-end">
-                            <Button variant="ghost" size="sm" onClick={handleEdit} disabled={isLoading && !isEditingThis}>Save</Button>
-                            <Button variant="ghost" size="sm" onClick={cancelEditing} disabled={isLoading && !isEditingThis}>Cancel</Button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity self-start">
-                            <Button variant="ghost" size="icon" onClick={() => startEditing(advisor)} aria-label={`Edit ${advisor.name}`} className="text-primary hover:bg-primary/10 h-7 w-7" disabled={isLoading || !!editingAdvisorId}>
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="icon" aria-label={`Remove ${advisor.name}`} className="text-destructive hover:bg-destructive/10 h-7 w-7" disabled={isLoading || !!editingAdvisorId}>
-                                  {isRemovingThis ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader><AlertDialogTitle>Confirm Deletion</AlertDialogTitle><AlertDialogDescription>
-                                    Are you sure you want to remove advisor '${advisor.name}' ({advisor.email})?
-                                    {advisor.status === 'active' && " This advisor has an active account."}
-                                    This action cannot be undone.
-                                </AlertDialogDescription></AlertDialogHeader>
-                                <AlertDialogFooter>
-                                    <AlertDialogCancel disabled={isLoading}>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => handleRemove(advisor.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={isLoading}>
-                                        {isRemovingThis ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Delete
-                                    </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </div>
-                        )}
-                      </div>
-                    </CardFooter>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-        </ScrollArea>
-      </CardContent>
-       <CardFooter className="text-sm text-muted-foreground pt-4">
-        Total Advisors: {advisors.length}
-      </CardFooter>
-    </Card>
+                    );
+                  })}
+                </div>
+              )}
+            </ScrollArea>
+          </CardContent>
+          <CardFooter className="text-sm text-muted-foreground pt-4">
+            Total Advisors: {advisors.length}
+          </CardFooter>
+        </Card>
+      </div>
     </TooltipProvider>
   );
 }
