@@ -53,12 +53,15 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 
 import { Advisor, LoggedEvent, StandardEventType, standardEventTypes, AdvisorPermissions } from '@/types';
 import { addAdvisor as addAdvisorService, updateAdvisorPermissions, getDefaultPermissions, updateAdvisorRole, dismissAdminDayFlag } from '@/lib/firestoreService';
 import { PolicyDataMap } from '@/components/policy-search';
 import AgentPage from '@/app/agent/page';
 import { updateAllAdvisorsMeetingHours } from '@/lib/adminDayUtils';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const ADVISORS_COLLECTION = 'advisors';
 const EVENTS_COLLECTION = 'loggedEvents';
@@ -101,29 +104,20 @@ export default function Home() {
   const [showAdminDayDialog, setShowAdminDayDialog] = useState(false);
   const [isTakingAdminDay, setIsTakingAdminDay] = useState(false);
 
-  // Tab scroll button logic
-  const tabsListRef = useRef<HTMLDivElement>(null);
-  const [showScrollLeft, setShowScrollLeft] = useState(false);
-  const [showScrollRight, setShowScrollRight] = useState(false);
+  const isMobile = useIsMobile();
+  const tabOptions = ([
+    userPermissions?.canAccessTimeLog ? { value: 'time-log', label: 'Time Log', icon: <Clock className="mr-2 h-4 w-4" /> } : undefined,
+    (userPermissions?.canAccessSummary || isCurrentUserAdmin) ? { value: 'summary', label: 'Summary', icon: <Calendar className="mr-2 h-4 w-4" /> } : undefined,
+    (userPermissions?.canAccessReports || isCurrentUserAdmin) ? { value: 'reports', label: 'Reports', icon: <AreaChart className="mr-2 h-4 w-4" /> } : undefined,
+    (userPermissions?.canAccessVisualisations || isCurrentUserAdmin) ? { value: 'visualizations', label: 'Visualizations', icon: <AreaChart className="mr-2 h-4 w-4" /> } : undefined,
+    userPermissions?.canAccessPolicySearch ? { value: 'policy-search', label: 'Policy Search', icon: <FileSearch className="mr-2 h-4 w-4" /> } : undefined,
+    userPermissions?.canAccessNextClearedBatch ? { value: 'next-cleared-batch', label: 'Next Cleared Batch', icon: <FileCheck2 className="mr-2 h-4 w-4" /> } : undefined,
+    userPermissions?.canAccessWholeOfMarket ? { value: 'whole-of-market', label: 'Whole Of Market', icon: <Building2 className="mr-2 h-4 w-4" /> } : undefined,
+    userPermissions?.canAccessAgentTools ? { value: 'agent', label: 'Agent Tools', icon: <Brain className="mr-2 h-4 w-4" /> } : undefined,
+    (userPermissions?.canManageAdvisors || isCurrentUserAdmin) ? { value: 'manage-advisors', label: 'Manage Advisors', icon: <Users className="mr-2 h-4 w-4" /> } : undefined,
+  ] as const).filter((tab): tab is { value: string; label: string; icon: JSX.Element } => !!tab);
 
-  useEffect(() => {
-    const handleScroll = () => {
-      const el = tabsListRef.current;
-      if (!el) return;
-      setShowScrollLeft(el.scrollLeft > 0);
-      setShowScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
-    };
-    const el = tabsListRef.current;
-    if (el) {
-      el.addEventListener('scroll', handleScroll);
-      handleScroll();
-    }
-    window.addEventListener('resize', handleScroll);
-    return () => {
-      if (el) el.removeEventListener('scroll', handleScroll);
-      window.removeEventListener('resize', handleScroll);
-    };
-  }, []);
+  const visibleTabs = tabOptions;
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
@@ -740,85 +734,15 @@ export default function Home() {
             </div>
          ) : (
              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                 <div className="relative w-full">
-                   {showScrollLeft && (
-                     <button
-                       type="button"
-                       aria-label="Scroll tabs left"
-                       className="absolute left-0 top-1/2 -translate-y-1/2 z-30 bg-card/80 rounded-full p-1 shadow-md border border-muted flex items-center justify-center"
-                       onClick={() => {
-                         const el = tabsListRef.current;
-                         if (el) el.scrollBy({ left: -150, behavior: 'smooth' });
-                       }}
-                     >
-                       <ChevronLeft className="h-5 w-5" />
-                     </button>
-                   )}
-                   <TabsList
-                     id="main-tabs-list"
-                     ref={tabsListRef}
-                     className="flex flex-row flex-nowrap overflow-x-auto rounded-xl shadow-lg bg-card/80 border mb-12 p-2 gap-2 h-auto sticky top-0 z-20 hide-scrollbar scroll-smooth"
-                     style={{ scrollBehavior: 'smooth' }}
-                   >
-                     {userPermissions?.canAccessTimeLog && (
-                        <TabsTrigger value="time-log" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
-                            <Clock className="mr-2 h-4 w-4" /> Time Log
-                        </TabsTrigger>
-                     )}
-                     {(userPermissions?.canAccessSummary || isCurrentUserAdmin) && (
-                        <TabsTrigger value="summary" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
-                            <Calendar className="mr-2 h-4 w-4" /> Summary
-                        </TabsTrigger>
-                     )}
-                     {(userPermissions?.canAccessReports || isCurrentUserAdmin) && (
-                        <TabsTrigger value="reports" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
-                            <AreaChart className="mr-2 h-4 w-4" /> Reports
-                        </TabsTrigger>
-                     )}
-                     {(userPermissions?.canAccessVisualisations || isCurrentUserAdmin) && (
-                        <TabsTrigger value="visualizations" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
-                            <AreaChart className="mr-2 h-4 w-4" /> Visualizations
-                        </TabsTrigger>
-                     )}
-                      {userPermissions?.canAccessPolicySearch && (
-                        <TabsTrigger value="policy-search" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
-                            <FileSearch className="mr-2 h-4 w-4" /> Policy Search
-                        </TabsTrigger>
-                      )}
-                      {userPermissions?.canAccessNextClearedBatch && (
-                        <TabsTrigger value="next-cleared-batch" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
-                            <FileCheck2 className="mr-2 h-4 w-4" /> Next Cleared Batch
-                        </TabsTrigger>
-                      )}
-                      {userPermissions?.canAccessWholeOfMarket && (
-                        <TabsTrigger value="whole-of-market" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
-                            <Building2 className="mr-2 h-4 w-4" /> Whole Of Market
-                        </TabsTrigger>
-                      )}
-                      {userPermissions?.canAccessAgentTools && (
-                        <TabsTrigger value="agent" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
-                            <Brain className="mr-2 h-4 w-4" /> Agent Tools
-                        </TabsTrigger>
-                      )}
-                     {(userPermissions?.canManageAdvisors || isCurrentUserAdmin) && (
-                        <TabsTrigger value="manage-advisors" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex-grow sm:flex-grow-0">
-                            <Users className="mr-2 h-4 w-4" /> Manage Advisors
-                        </TabsTrigger>
-                     )}
+                 <div className="w-full mb-12">
+                   <TabsList className="flex flex-row rounded-xl shadow-lg bg-card/80 border p-2 gap-2 h-auto w-full items-center overflow-x-hidden hover:overflow-x-auto whitespace-nowrap [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-track]:bg-muted [&::-webkit-scrollbar-thumb]:bg-primary/50 [&::-webkit-scrollbar-thumb]:rounded-full [&:not(:hover)]:overflow-x-hidden [&:hover]:overflow-x-auto [&:hover]:overflow-y-hidden">
+                     {visibleTabs.map(tab => (
+                       <TabsTrigger key={tab.value} value={tab.value} className="nav-tab data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex items-center px-4 py-2 rounded-md font-medium whitespace-nowrap">
+                         {tab.icon}
+                         {tab.label}
+                       </TabsTrigger>
+                     ))}
                    </TabsList>
-                   {showScrollRight && (
-                     <button
-                       type="button"
-                       aria-label="Scroll tabs right"
-                       className="absolute right-0 top-1/2 -translate-y-1/2 z-30 bg-card/80 rounded-full p-1 shadow-md border border-muted flex items-center justify-center"
-                       onClick={() => {
-                         const el = tabsListRef.current;
-                         if (el) el.scrollBy({ left: 150, behavior: 'smooth' });
-                       }}
-                     >
-                       <ChevronRight className="h-5 w-5" />
-                     </button>
-                   )}
                  </div>
 
                 {userPermissions?.canAccessTimeLog ? (
