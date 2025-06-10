@@ -1,41 +1,8 @@
-# Node dependencies
-node_modules/
-
-# Next.js build output and cache
+.firebase/
+.idx/
 .next/
-
-# Firebase - specifically ignore node_modules within functions if they are deployed separately
-# and potentially other large files within .firebase/ if they are build artifacts.
-# Keep firebase.json and .firebaserc if you want to track them.
-.firebase/*/functions/node_modules/
-.firebase/*/functions/lib/
-.firebase/cx-time-log-fresh/ # This specific path also needs to be ignored based on errors
-
-# Logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Local environment variables
 .env.local
-.env.*.local
-*.env
-
-# macOS
-.DS_Store
-
-# IDE / Editor specific
-.vscode/
-.idea/
-
-# Build outputs (if applicable, though .next/ usually covers Next.js)
-# build/
-# dist/
-# out/
-
-# Other common ignores
-coverage/
+.env.*
+!/.env.example
 *.tsbuildinfo
-
-OPEN_AI_API.txt
+node_modules
