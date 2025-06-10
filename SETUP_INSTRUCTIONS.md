@@ -26,7 +26,7 @@ This document provides instructions on how to set up and run the CX_TIME_LOG pro
 3.  **Set Up Environment Variables:**
     This project uses environment variables for configuration (e.g., Firebase API keys).
     *   Create a new file named `.env.local` in the root of the project.
-    *   You will need to populate this file with the necessary Firebase configuration and any other required environment variables. Typically, these include:
+    *   Populate this file with **all** required Firebase settings. The application will throw an error if any of these are missing:
         ```
         NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
         NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_auth_domain
