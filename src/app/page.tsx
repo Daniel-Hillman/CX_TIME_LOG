@@ -38,7 +38,7 @@ import { LoginForm } from '@/components/auth/login-form';
 import { SignUpForm } from '@/components/auth/signup-form';
 import { Button } from '@/components/ui/button';
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, Clock, Users, AreaChart, FileSearch, FileCheck2, LogOut, Loader2, Building2, ShieldAlert, Brain, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, Clock, Users, AreaChart, FileSearch, FileCheck2, LogOut, Loader2, Building2, ShieldAlert, Brain, ChevronLeft, ChevronRight, Home as HomeIcon } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
@@ -656,6 +656,15 @@ export default function Home() {
             </div>
              <div className="absolute right-0 top-1/2 transform -translate-y-1/2 flex items-center space-x-2">
                  {user.email && <span className="text-sm text-muted-foreground hidden md:inline">{user.email}</span>}
+                 <Button 
+                     variant="outline" 
+                     size="icon" 
+                     onClick={() => setActiveTab('time-log')} 
+                     title="Home"
+                     className="hover:bg-primary hover:text-primary-foreground"
+                 >
+                     <HomeIcon className="h-5 w-5" />
+                 </Button>
                  <ThemeToggle />
                  <Button variant="outline" size="icon" onClick={handleLogout} title="Logout">
                      <LogOut className="h-5 w-5" />
