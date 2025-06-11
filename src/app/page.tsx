@@ -62,6 +62,7 @@ import AgentPage from '@/app/agent/page';
 import { updateAllAdvisorsMeetingHours } from '@/lib/adminDayUtils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import Silk from '@/components/Silk';
 
 const ADVISORS_COLLECTION = 'advisors';
 const EVENTS_COLLECTION = 'loggedEvents';
@@ -616,8 +617,11 @@ export default function Home() {
   if (!user) {
     return (
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-             <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-4">
-                 <header className="flex justify-center items-center relative mb-8 pb-4 border-b w-full max-w-4xl">
+            <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-4 relative overflow-hidden">
+                <div className="absolute inset-0 -z-10">
+                  <Silk color="#7B7481" speed={5} scale={1} noiseIntensity={1.5} rotation={0} />
+                </div>
+                <header className="flex justify-center items-center relative mb-8 pb-4 border-b w-full max-w-4xl">
                     <div className="text-5xl font-designer font-bold text-blue-500">
                        Tempo
                     </div>
